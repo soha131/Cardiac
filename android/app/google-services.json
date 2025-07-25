@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "107152031907",
+    "project_id": "cardiac-e7644",
+    "storage_bucket": "cardiac-e7644.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:107152031907:android:954639249e86b9015e7f16",
+        "android_client_info": {
+          "package_name": "com.example.cardiac_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCeud2Qsdw_YcDv7RYdkzwUlTtNvWwTfLs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
