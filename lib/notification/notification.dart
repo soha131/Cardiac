@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:googleapis_auth/auth_io.dart';
 
@@ -47,10 +47,10 @@ Future<void> sendFCMNotificationV1({
   );
 
   if (response.statusCode == 200) {
-    print('✅ Notification sent successfully!');
+    debugPrint('✅ Notification sent successfully!');
   } else {
-    print('❌ Failed to send notification: ${response.statusCode}');
-    print(response.body);
+    debugPrint('❌ Failed to send notification: ${response.statusCode}');
+    debugPrint(response.body);
   }
 
   client.close();
@@ -64,7 +64,6 @@ Future<void> sendFCMToSpecificUser({
   required String userFcmToken,
 }) async {
   try {
-    print('🎯 Sending to token: $userFcmToken');
 
     final serviceAccountJson = await rootBundle.loadString(_serviceAccountPath);
     final accountCredentials = ServiceAccountCredentials.fromJson(serviceAccountJson);
@@ -99,15 +98,15 @@ Future<void> sendFCMToSpecificUser({
     );
 
     if (response.statusCode == 200) {
-      print('✅ Notification sent to specific user!');
+      debugPrint('✅ Notification sent to specific user!');
     } else {
-      print('❌ Failed to send notification: ${response.statusCode}');
-      print(response.body);
+      debugPrint('❌ Failed to send notification: ${response.statusCode}');
+      debugPrint(response.body);
     }
 
     client.close();
   } catch (e) {
-    print('🔥 Error sending FCM: $e');
+    debugPrint('🔥 Error sending FCM: $e');
   }
 }
 
@@ -115,7 +114,6 @@ Future<void> sendFCMToSpecificUser({
 
 class NotificationService {
   static Future<void> initFCM() async {
-    print("🚀 initFCM اشتغل");
 
     // ✅ نطلب التصريح مباشرةً
     NotificationSettings settings = await FirebaseMessaging.instance.requestPermission(
@@ -125,14 +123,13 @@ class NotificationService {
     );
 
     // ✅ نطبع الحالة
-    print('🔐 حالة الصلاحية: ${settings.authorizationStatus}');
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      print("✅ تم السماح بالإشعارات");
+      debugPrint("✅ تم السماح بالإشعارات");
     } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
-      print("🟡 سماح مؤقت بالإشعارات");
+      debugPrint("🟡 سماح مؤقت بالإشعارات");
     } else {
-      print("❌ تم رفض الإشعارات");
+      debugPrint("❌ تم رفض الإشعارات");
       // 💡 ممكن تعرضي Dialog للمستخدم تقوليله يفعّلها من الإعدادات
     }
 
@@ -140,16 +137,12 @@ class NotificationService {
     await FirebaseMessaging.instance.subscribeToTopic('all_users');
 
     final token = await FirebaseMessaging.instance.getToken();
-    print('📱 FCM Token: $token');
 
     FirebaseMessaging.onMessage.listen((message) {
-      print("📲 إشعار وصلك والتطبيق شغال:");
 
       final title = message.notification?.title ?? message.data['title'] ?? 'بدون عنوان';
       final body = message.notification?.body ?? message.data['body'] ?? 'بدون محتوى';
 
-      print("العنوان: $title");
-      print("المحتوى: $body");
 
       LocalNotificationService.showNotification(
         title: title,
@@ -158,7 +151,7 @@ class NotificationService {
     });
 
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      print("✅ المستخدم فتح التطبيق من الإشعار");
+      debugPrint("✅ المستخدم فتح التطبيق من الإشعار");
     });
   }
 }

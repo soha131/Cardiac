@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
+import 'core/ecg_cubit.dart';
 import 'core/risk_prediction_cubit.dart';
 import 'notification/local_notification_service.dart';
 import 'notification/notification.dart';
@@ -18,10 +19,15 @@ import 'auth/sign_up.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  await EasyLocalization.ensureInitialized();
-  await LocalNotificationService.init();
-  await NotificationService.initFCM();
+  try {
+    await Firebase.initializeApp();
+    await EasyLocalization.ensureInitialized();
+    await LocalNotificationService.init();
+    await NotificationService.initFCM();
+  } catch (e, s) {
+    debugPrint("🔥 Initialization error: $e");
+    print(s);
+  }
 
   runApp(
     EasyLocalization(
@@ -31,6 +37,7 @@ void main() async {
       child: MultiBlocProvider(
         providers: [
           BlocProvider(create: (_) => RiskPredictionCubit()),
+          BlocProvider(create: (_) => ECGCubit()),
         ],
         child: MultiProvider(
           providers: [

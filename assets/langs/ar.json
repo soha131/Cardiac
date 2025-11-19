@@ -185,7 +185,27 @@
   "Patient at moderate risk; monitor closely.": "المريض معرض لخطر متوسط؛ يجب مراقبته عن كثب.",
   "Patient is stable; continue regular monitoring.": "المريض مستقر؛ استمر في المتابعة الدورية.",
   "No risk level data available.": "لا توجد بيانات متاحة عن مستوى الخطورة.",
-  "Patient data not found": "لم يتم العثور على بيانات المريض"
+  "Patient data not found": "لم يتم العثور على بيانات المريض",
+  "ECG Analysis": "تحليل ECG",
+  "Tap to upload ECG image": "اضغط لتحميل صورة ECG",
+  "Supports JPG, PNG": "يدعم JPG، PNG",
+  "Analyze ECG": "تحليل ECG",
+  "N": "لا",
+  "Y": "نعم",
+  "Take a photo": "التقاط صورة",
+  "Choose from gallery": "اختر من المعرض",
+  "RESULT": "النتيجة",
+  "Predicted Class:": "الفئة المتوقعة:",
+  "Confidence:": "مستوى الثقة:",
+  "Confidence Level": "مستوى الثقة",
+  "Diagnosis Result": "نتيجة التشخيص",
+  "Save": "حفظ",
+  "Saved successfully": "تم الحفظ بنجاح",
+  "Error": "خطأ",
+  "Drag or Click to choose an Image": "اسحب أو اضغط لاختيار صورة",
+  "Take Photo": "التقاط صورة",
+  "Choose from Gallery": "اختر من المعرض",
+  "Saved to patient record": "تم الحفظ في سجل المريض"
 
 }
 

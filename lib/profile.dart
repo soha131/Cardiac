@@ -118,7 +118,7 @@ class ProfileScreen extends StatelessWidget {
                     context.read<ThemeProvider>().toggleTheme(val);
                   },
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 10),
                 Center(
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(

@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../core/patient_data_model.dart';
 import '../notification/notification.dart';
+import 'ECGAnalyzeScreen.dart';
 
 class NurseEntryScreen extends StatefulWidget {
   final String patientId;
@@ -170,61 +171,74 @@ class _NurseEntryScreenState extends State<NurseEntryScreen> {
 
 
   void _submitMedicalData() async {
-    if (!_formKey.currentState!.validate()) return;
-    print("widget.patientId:${widget.patientId}");
+    if (!_formKey.currentState!.validate()) {
+      debugPrint("⚠️ Form validation failed");
+      return;
+    }
+    debugPrint("✅ widget.patientId: ${widget.patientId}");
 
     try {
-      final parsedHeartRate = double.parse(_heartRate.text);
-      final parsedSystolic = double.parse(_systolic.text);
-      final parsedDiastolic = double.parse(_diastolic.text);
-      final parsedSpO2 = double.parse(_spo2.text);
-      final parsedRespRate = double.parse(_respiratoryRateController.text);
+      debugPrint("⏳ Start parsing vitals...");
+      final parsedHeartRate = double.tryParse(_heartRate.text) ?? 0.0;
+      final parsedSystolic = double.tryParse(_systolic.text) ?? 0.0;
+      final parsedDiastolic = double.tryParse(_diastolic.text) ?? 0.0;
+      final parsedSpO2 = double.tryParse(_spo2.text) ?? 0.0;
+      final parsedRespRate = double.tryParse(_respiratoryRateController.text) ?? 0.0;
       final ecgList = _parseEcgList(_ecg.text);
 
+      debugPrint("✅ Vitals parsed successfully");
+
       final xgbData = XGBoostRequest(
-        age: (widget.patientData['age'] as num).toDouble(),
-        sex: widget.patientData['sex'] ?? 'F',
-        bmi: (widget.patientData['bmi'] as num).toDouble(),
-        ageGroup: _selectedAgeGroup!,
-        bmiCategory: _selectedBmiCategory!,
-        preopHtn: _selectedHtn!,
-        preopDm: _selectedDm!,
-        preopEcg: _selectedEcg!,
-        preopPft: _selectedPft!,
-        preopHb: double.parse(_hbController.text),
-        preopPlt: double.parse(_pltController.text),
-        preopPt: double.parse(_ptController.text),
-        preopAptt: double.parse(_apttController.text),
-        preopNa: double.parse(_naController.text),
-        preopK: double.parse(_kController.text),
-        preopGluc: double.parse(_glucController.text),
-        preopAlb: double.parse(_albController.text),
-        preopAst: double.parse(_astController.text),
-        preopAlt: double.parse(_altController.text),
-        preopBun: double.parse(_bunController.text),
-        preopCr: double.parse(_crController.text),
+        age: double.tryParse(widget.patientData['age']?.toString() ?? "0") ?? 0,
+        sex: widget.patientData['sex']?.toString() ?? 'F',
+        bmi: double.tryParse(widget.patientData['bmi']?.toString() ?? "0") ?? 0,
+        ageGroup: _selectedAgeGroup ?? "unknown",
+        bmiCategory: _selectedBmiCategory ?? "unknown",
+        preopHtn: _selectedHtn ?? "N",
+        preopDm: _selectedDm ?? "N",
+        preopEcg: _selectedEcg ?? "Normal",
+        preopPft: _selectedPft ?? "Normal",
+        preopHb: double.tryParse(_hbController.text) ?? 0,
+        preopPlt: double.tryParse(_pltController.text) ?? 0,
+        preopPt: double.tryParse(_ptController.text) ?? 0,
+        preopAptt: double.tryParse(_apttController.text) ?? 0,
+        preopNa: double.tryParse(_naController.text) ?? 0,
+        preopK: double.tryParse(_kController.text) ?? 0,
+        preopGluc: double.tryParse(_glucController.text) ?? 0,
+        preopAlb: double.tryParse(_albController.text) ?? 0,
+        preopAst: double.tryParse(_astController.text) ?? 0,
+        preopAlt: double.tryParse(_altController.text) ?? 0,
+        preopBun: double.tryParse(_bunController.text) ?? 0,
+        preopCr: double.tryParse(_crController.text) ?? 0,
       );
+
+      debugPrint("✅ XGBoostRequest created");
 
       final lstmData = LstmRequest(
-        data: List.generate(1, (_) => [
-          parsedHeartRate,
-          parsedSystolic,
-          parsedDiastolic,
-          double.parse(((parsedSystolic + parsedDiastolic) / 2).toStringAsFixed(1)),
-          parsedSpO2,
-          parsedRespRate,
-        ]),
+        data: [
+          [
+            parsedHeartRate,
+            parsedSystolic,
+            parsedDiastolic,
+            double.parse(((parsedSystolic + parsedDiastolic) / 2).toStringAsFixed(1)),
+            parsedSpO2,
+            parsedRespRate,
+          ]
+        ],
       );
+      debugPrint("✅ LSTMRequest created");
 
       final cnnData = CnnRequest(ecgSignal: ecgList);
-      final cubit = context.read<RiskPredictionCubit>();
+      debugPrint("✅ CNNRequest created");
 
+      final cubit = context.read<RiskPredictionCubit>();
       final aggregatedRequest = {
         ...xgbData.toJson(),
         "ecg_signal": ecgList,
         "lstm_data": lstmData.data,
       };
 
+      debugPrint("🚀 Sending requests to cubit...");
       final results = await Future.wait([
         cubit.predictMiRiskFloat(xgbData),
         cubit.predictMiRiskBinary(xgbData),
@@ -236,6 +250,15 @@ class _NurseEntryScreenState extends State<NurseEntryScreen> {
         cubit.predictLstmRiskBinary(lstmData),
         cubit.predictAggregatedRisk(aggregatedRequest),
       ]);
+      debugPrint("✅ Predictions received");
+      for (int i = 0; i < results.length; i++) {
+        if (results[i] is RiskError) {
+          final err = results[i] as RiskError;
+          debugPrint("❌ Result[$i] Error: ${err.message}");
+        } else {
+          debugPrint("✅ Result[$i]: ${results[i]}");
+        }
+      }
 
       double? miScore, miBinary;
       double? hfScore, hfBinary;
@@ -255,6 +278,7 @@ class _NurseEntryScreenState extends State<NurseEntryScreen> {
 
       if ([miScore, miBinary, hfScore, hfBinary, cnnScore, cnnBinary, lstmScore, lstmBinary, totalScore]
           .any((e) => e != null)) {
+        debugPrint("📝 Updating Firestore...");
         await FirebaseFirestore.instance.collection('patient_data').doc(widget.patientId).update({
           'heartRate': parsedHeartRate,
           'spo2': parsedSpO2,
@@ -273,17 +297,20 @@ class _NurseEntryScreenState extends State<NurseEntryScreen> {
           'vitalSignsRiskScore': lstmScore,
           'vitalSignsRiskBinary': lstmBinary,
           'aggregatedRiskScore': totalScore,
-          'glucose': double.parse(_glucController.text),
+          'glucose': double.tryParse(_glucController.text) ?? 0,
           'riskUpdatedAt': DateTime.now(),
           'updatedByNurseAt': Timestamp.now(),
           ...xgbData.toJson(),
         });
+        debugPrint("✅ Firestore updated");
 
         /// 🟡 إرسال إشعارات بعد التحديث
         final level = getRiskLevelFromScore(totalScore);
-        final valuesText = '🫀 Heart Rate: $parsedHeartRate bpm\n🩸 BP: $parsedSystolic/$parsedDiastolic mmHg\n🧪 SpO2: $parsedSpO2%';
+        final valuesText =
+            '🫀 Heart Rate: $parsedHeartRate bpm\n🩸 BP: $parsedSystolic/$parsedDiastolic mmHg\n🧪 SpO2: $parsedSpO2%';
 
         try {
+          debugPrint("📡 Sending notifications...");
           final userDoc = await FirebaseFirestore.instance.collection('users').doc(widget.patientId).get();
           final patientName = userDoc.data()?['name'] ?? 'Unknown';
           final patientToken = userDoc.data()?['fcmToken'];
@@ -306,9 +333,8 @@ class _NurseEntryScreenState extends State<NurseEntryScreen> {
               'title': "🩺 Your Risk Status: $level",
               'body': patientMessage,
               'risk': level,
-              'sentAt': Timestamp.now(), // ← دي لحظية ومضمونة
+              'sentAt': Timestamp.now(),
             });
-
           }
 
           final staffSnapshot = await FirebaseFirestore.instance
@@ -329,23 +355,21 @@ class _NurseEntryScreenState extends State<NurseEntryScreen> {
                 body: staffMessage,
                 userFcmToken: staffToken,
               );
-              await FirebaseFirestore.instance
-                  .collection('notifications')
-                  .add({
+              await FirebaseFirestore.instance.collection('notifications').add({
                 'title': "🚨 Alert: $patientName is $level",
                 'body': staffMessage,
                 'timestamp': FieldValue.serverTimestamp(),
-                'targetRole': doc.data()['role'], // "Nurse" or "Doctor"
+                'targetRole': doc.data()['role'],
                 'name': patientName,
                 'alert': "$patientName is currently at $level level.",
-                'risk': level, // "low", "moderate", or "critical"
-                'valuesData':valuesText
+                'risk': level,
+                'valuesData': valuesText,
               });
-
             }
           }
+          debugPrint("✅ Notifications sent");
         } catch (e) {
-          print("❌ Failed to send notifications: $e");
+          debugPrint("❌ Failed to send notifications: $e");
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -356,11 +380,13 @@ class _NurseEntryScreenState extends State<NurseEntryScreen> {
         );
         Navigator.pop(context);
       } else {
+        debugPrint("⚠️ Prediction results were null");
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('❌ فشل في التنبؤ بالخطورة')),
         );
       }
     } catch (e) {
+      debugPrint("❌ Exception caught in _submitMedicalData: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('❌ Error: ${e.toString()}')),
       );
@@ -472,7 +498,25 @@ class _NurseEntryScreenState extends State<NurseEntryScreen> {
                 _buildField('Pre-op BUN'.tr(), _bunController),
                 _buildField('Pre-op Cr'.tr(), _crController),
               ]),
+              const SizedBox(height: 10),
 
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => ECGAnalyzeScreen(patientId: widget.patientId,)),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue[600],
+                  padding: const EdgeInsets.symmetric(horizontal: 82, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.show_chart, color: Colors.white),
+                label:  Text("Analyze ECG".tr(), style: const TextStyle(fontSize: 20, color: Colors.white)),
+              ),
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _submitMedicalData,

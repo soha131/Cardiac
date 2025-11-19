@@ -122,7 +122,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       // 💡 Get FCM Token
                       final fcmToken = await FirebaseMessaging.instance.getToken();
-                      print("📱 FCM Token: $fcmToken");
 
                       // 💾 Save the token inside user's document
                       await FirebaseFirestore.instance.collection('users').doc(uid).update({

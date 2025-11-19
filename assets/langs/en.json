@@ -184,7 +184,27 @@
   "Patient at moderate risk; monitor closely.": "Patient at moderate risk; monitor closely.",
   "Patient is stable; continue regular monitoring.": "Patient is stable; continue regular monitoring.",
   "No risk level data available.": "No risk level data available.",
-  "Patient data not found": "Patient data not found"
+  "Patient data not found": "Patient data not found",
 
+  "ECG Analysis": "ECG Analysis",
+  "Tap to upload ECG image": "Tap to upload ECG image",
+  "Supports JPG, PNG": "Supports JPG, PNG",
+  "Analyze ECG": "Analyze ECG",
+  "N": "N",
+  "Y": "Y",
+  "Take a photo": "Take a photo",
+  "Choose from gallery": "Choose from gallery",
+  "RESULT": "RESULT",
+  "Predicted Class:": "Predicted Class:",
+  "Confidence:": "Confidence:",
+  "Confidence Level": "Confidence Level",
+  "Diagnosis Result": "Diagnosis Result",
+  "Save": "Save",
+  "Saved successfully": "Saved successfully",
+  "Error": "Error",
+  "Drag or Click to choose an Image": "Drag or Click to choose an Image",
+  "Take Photo": "Take Photo",
+  "Choose from Gallery": "Choose from Gallery",
+  "Saved to patient record": "Saved to patient record"
 
 }
