@@ -58,7 +58,7 @@ The ICU Cardiac Monitoring System is a comprehensive mobile application designed
 ---
 ## 🪄 App Preview
 
-![App Demo](assets/demo_cardiac.gif)
+![App Demo](assets/cardiac.gif)
 
 ---
 
