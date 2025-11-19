@@ -1,0 +1,3755 @@
+﻿===== E:\cardiac_app\lib\alert.dart =====
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
+
+class AlertScreen extends StatelessWidget {
+  final String currentUserRole; // Ù…Ø«Ø§Ù„: "doctor" Ø£Ùˆ "nurse"
+  const AlertScreen({super.key, required this.currentUserRole});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text("alerts".tr())),
+      body: StreamBuilder<QuerySnapshot>(
+        stream:
+            FirebaseFirestore.instance
+                .collection('notifications')
+                .where('targetRole', isEqualTo: currentUserRole)
+                .orderBy('timestamp', descending: true)
+                .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return Center(child: Text("No alerts".tr()));
+          }
+
+          final alerts = snapshot.data!.docs;
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: alerts.length,
+            itemBuilder: (context, index) {
+              final data = alerts[index].data() as Map<String, dynamic>;
+              return _buildAlertItem(
+                name: data['name'] ?? 'Unknown',
+                valuesData: data['valuesData'] ?? '',
+                time: _formatTime(data['timestamp']),
+                risk: data['risk'] ?? 'stable',
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  String _formatTime(Timestamp? timestamp) {
+    if (timestamp == null) return '';
+    final date = timestamp.toDate();
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inMinutes < 1) return "Just now";
+    if (diff.inMinutes < 60) return "${diff.inMinutes} min";
+    if (diff.inHours < 24) return "${diff.inHours} h";
+    return "Yesterday";
+  }
+
+  Widget _buildAlertItem({
+    required String name,
+    required String valuesData,
+    required String time,
+    required String risk,
+  }) {
+    Color bgColor;
+    Color textColor;
+
+    switch (risk) {
+      case "Critical Risk":
+        bgColor = Colors.red;
+        textColor = Colors.white;
+        break;
+      case "Moderate Risk":
+        bgColor = Colors.orange;
+        textColor = Colors.white;
+        break;
+      case "Stable":
+        bgColor = Colors.green;
+        textColor = Colors.white;
+        break;
+      default:
+        bgColor = Colors.grey.shade200;
+        textColor = Colors.black;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(width: .5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              Align(
+                alignment: Alignment.topRight,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    risk.tr(),
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: textColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+              Text(
+                "$valuesData ",
+                style: const TextStyle(fontSize: 20),
+              ),
+              Text(
+                "â€¢ $time ${"ago".tr()}",
+                style: const TextStyle(fontSize: 15,color: Colors.grey),
+              ),
+
+        ],
+      ),
+    );
+  }
+}
+===== E:\cardiac_app\lib\auth\forget_password.dart =====
+import 'package:easy_localization/easy_localization.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({super.key});
+
+  @override
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+}
+
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+  final _auth = FirebaseAuth.instance;
+  final _emailController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+  bool _emailSent = false;
+
+  Future<void> _sendPasswordResetEmail() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+    try {
+      await _auth.sendPasswordResetEmail(email: _emailController.text.trim());
+      setState(() {
+        _emailSent = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+         SnackBar(content: Text('Password reset email sent. Check your inbox.'.tr())),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      String errorMessage = 'An error occurred. Please try again.'.tr();
+      if (e is FirebaseAuthException) {
+        switch (e.code) {
+          case 'user-not-found':
+            errorMessage = 'No user found with this email.'.tr();
+            break;
+          case 'invalid-email':
+            errorMessage = 'Invalid email address.'.tr();
+            break;
+        }
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage)),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                   Text(
+                    'Forgot Password'.tr(),
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xff0B2346),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                   Text(
+                    'Enter your email to reset your password'.tr(),
+                    style: TextStyle(fontSize: 16, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 30),
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    style: TextStyle(color:Colors.grey),
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.email, color:Colors.blue),
+                      hintText: 'user@mail.com',
+                      filled: true,
+                      fillColor: Color(0xffffffff),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your email'.tr();
+                      }
+                      if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+                        return 'Please enter a valid email'.tr();
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _sendPasswordResetEmail,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue[600],
+                      minimumSize: const Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        :  Text(
+                      _emailSent ? 'Email Sent!'.tr() : 'Send Reset Email'.tr(),
+                      style: TextStyle(fontSize: 18, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+===== E:\cardiac_app\lib\auth\login.dart =====
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'forget_password.dart';
+import 'sign_up.dart';
+
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _showPassword = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 60),
+              Container(
+                width: 100,
+                height: 100,
+                decoration: const BoxDecoration(
+                  color: Colors.blue,
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Icon(Icons.favorite, size: 50, color: Colors.white),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                "ICU Cardiac \n Monitoring".tr(), // ICU Cardiac Monitoring
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 44,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 40),
+              TextField(
+                controller: _emailController,
+                style: TextStyle(color:Colors.grey),
+                decoration: InputDecoration(
+                  hintText: 'email'.tr(),
+                  hintStyle: const TextStyle(color: Colors.grey),
+                  filled: true,
+                  fillColor: Colors.white,
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xff64B5F6)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xff64B5F6)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: _passwordController,
+                obscureText: !_showPassword,
+                style: TextStyle(color:Colors.grey),
+                decoration: InputDecoration(
+                  hintText: 'password'.tr(),
+                  hintStyle: const TextStyle(color: Colors.grey),
+                  filled: true,
+                  fillColor: Colors.white,
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xff64B5F6)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xff64B5F6)),
+                  ),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _showPassword ? Icons.visibility : Icons.visibility_off,
+                      color: Colors.grey,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _showPassword = !_showPassword;
+                      });
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(50),
+                  backgroundColor: Colors.blue,
+                ),
+                  onPressed: () async {
+                    try {
+                      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+                        email: _emailController.text.trim(),
+                        password: _passwordController.text.trim(),
+                      );
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("login_success".tr())),
+                      );
+
+                      final uid = userCredential.user!.uid;
+                      await FirebaseMessaging.instance.requestPermission();
+
+                      // ðŸ’¡ Get FCM Token
+                      final fcmToken = await FirebaseMessaging.instance.getToken();
+
+                      // ðŸ’¾ Save the token inside user's document
+                      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+                        'fcmToken': fcmToken,
+                      });
+
+                      final userDoc = await FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(uid)
+                          .get();
+
+                      final role = userDoc['role'];
+
+                      if (role == 'Patient') {
+                        final dataDoc = await FirebaseFirestore.instance
+                            .collection('patient_data')
+                            .doc(uid)
+                            .get();
+
+                        if (dataDoc.exists) {
+                          Navigator.pushReplacementNamed(context, '/patient_profile');
+                        } else {
+                          Navigator.pushReplacementNamed(context, '/patient_home');
+                        }
+
+                      } else if (role == 'Nurse') {
+                        Navigator.pushReplacementNamed(context, '/nurse_home');
+                      } else if (role == 'Doctor') {
+                        Navigator.pushReplacementNamed(context, '/doctor_home');
+                      }
+
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("${"login_failed".tr()}: ${e.toString()}")),
+                      );
+                    }
+                  },
+                  child: Text("login".tr(), style: const TextStyle(color: Colors.white)),
+              ),
+              const SizedBox(height: 10),
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                  );
+                },
+                child: Text(
+                  "forgot_password".tr(),
+                  style: TextStyle(color: Colors.blue[600]),
+                ),
+              ),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text("no_account".tr(), style: const TextStyle(color: Colors.grey),),
+                  const SizedBox(height: 5),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const SignUpScreen()));
+                    },
+                    child: Text(
+                      "sign_up".tr(),
+                      style: const TextStyle(color: Colors.blue, fontSize: 18),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+===== E:\cardiac_app\lib\auth\sign_up.dart =====
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'login.dart';
+
+class SignUpScreen extends StatefulWidget {
+  const SignUpScreen({super.key});
+
+  @override
+  State<SignUpScreen> createState() => _SignUpScreenState();
+}
+
+class _SignUpScreenState extends State<SignUpScreen> {
+  bool _showPassword = false;
+  bool _showConfirmPassword = false;
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  final List<String> _roles = ['patient', 'nurse', 'doctor'];
+  String _selectedRole = 'patient';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.blue,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 60),
+              Text(
+                "sign_up".tr(),
+                style: const TextStyle(fontSize: 38, color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 30),
+              _buildField("name".tr(), _nameController),
+              const SizedBox(height: 15),
+              _buildField("email".tr(), _emailController),
+              const SizedBox(height: 15),
+              _buildField("password".tr(), _passwordController, isPasswordField: true),
+              const SizedBox(height: 15),
+              _buildField("confirm_password".tr(), _confirmPasswordController, isConfirmPassword: true),
+              const SizedBox(height: 15),
+              DropdownButtonFormField<String>(
+                value: _selectedRole,
+                items: _roles
+                    .map((role) => DropdownMenuItem(
+                  value: role,
+                  child: Text(role.tr()),
+                ))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedRole = value!;
+                  });
+                },
+                style: TextStyle(color:Colors.grey),
+                decoration: InputDecoration(
+                  hintStyle: TextStyle(color:Colors.grey),
+                 labelStyle: TextStyle(color:Colors.grey),
+                  filled: true,
+                  fillColor: Colors.white,
+                  hintText: "select_role".tr(),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Colors.white),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xff64B5F6)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(50),
+                  backgroundColor: Colors.blue[600],
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () async {
+                  if (_passwordController.text != _confirmPasswordController.text) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("passwords_not_match".tr())),
+                    );
+                    return;
+                  }
+
+                  try {
+                    final credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+                      email: _emailController.text.trim(),
+                      password: _passwordController.text.trim(),
+                    );
+                    await FirebaseFirestore.instance.collection('users').doc(credential.user!.uid).set({
+                      'uid': credential.user!.uid,
+                      'name': _nameController.text.trim(),
+                      'email': _emailController.text.trim(),
+                      'role': _selectedRole.tr(),
+                      'createdAt': Timestamp.now(),
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("account_created".tr())),
+                    );
+
+                    final userDoc = await FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(credential.user!.uid)
+                        .get();
+
+                    final role = userDoc['role'];
+
+                    if (role == 'Patient' || role == 'Ù…Ø±ÙŠØ¶/ Ù…Ø±ÙŠØ¶Ù‡') {
+                      Navigator.pushReplacementNamed(context, '/patient_home');
+                    } else if (role == 'Nurse' || role == 'Ù…Ù…Ø±Ø¶/ Ù…Ù…Ø±Ø¶Ø©') {
+                      Navigator.pushReplacementNamed(context, '/nurse_home');
+                    } else if (role == 'Doctor' || role == 'Ø·Ø¨ÙŠØ¨/ Ø·Ø¨ÙŠØ¨Ù‡') {
+                      Navigator.pushReplacementNamed(context, '/doctor_home');
+                    }
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Error: ${e.toString()}")),
+                    );
+                  }
+                },
+                child: Text("sign_up".tr()),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                "already_have_account".tr(),
+                style: const TextStyle(color: Colors.white, fontSize: 20),
+              ),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LoginScreen()),
+                  );
+                },
+                child: Text(
+                  "login".tr(),
+                  style: const TextStyle(color: Colors.white, fontSize: 25),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildField(String hint, TextEditingController controller,
+      {bool isPasswordField = false, bool isConfirmPassword = false}) {
+    bool isPassword = hint.toLowerCase().contains("password");
+
+    return TextField(
+      controller: controller,
+      obscureText: isPasswordField ? !_showPassword : isConfirmPassword ? !_showConfirmPassword : false,
+      style: TextStyle(color:Colors.grey),
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: Colors.white,
+        hintText: hint,
+        hintStyle: const TextStyle(color: Colors.grey),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Colors.white),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Color(0xff64B5F6)),
+        ),
+        suffixIcon: isPassword
+            ? IconButton(
+          icon: Icon(
+            (isPasswordField && _showPassword) || (isConfirmPassword && _showConfirmPassword)
+                ? Icons.visibility
+                : Icons.visibility_off,
+            color: Colors.grey,
+          ),
+          onPressed: () {
+            setState(() {
+              if (isPasswordField) {
+                _showPassword = !_showPassword;
+              } else if (isConfirmPassword) {
+                _showConfirmPassword = !_showConfirmPassword;
+              }
+            });
+          },
+        )
+            : null,
+      ),
+    );
+  }
+}
+===== E:\cardiac_app\lib\core\ecg_cubit.dart =====
+import 'dart:convert';
+import 'dart:io';
+import 'package:bloc/bloc.dart';
+import 'package:http/http.dart' as http;
+import 'ecg_state.dart';
+
+class ECGCubit extends Cubit<ECGState> {
+  ECGCubit() : super(ECGInitial());
+
+ // final String baseUrl = "http://192.168.100.6:8000";
+  final String baseUrl = "http://10.0.2.2:8000";
+  Future<void> predictECG(File imageFile) async {
+    try {
+      emit(ECGLoading());
+
+      final uri = Uri.parse("$baseUrl/predict");
+
+      final request = http.MultipartRequest("POST", uri)
+        ..files.add(
+          await http.MultipartFile.fromPath("file", imageFile.path),
+        );
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        emit(
+          ECGSuccess(
+            predictedClass: data["predicted_class"],
+            confidence: (data["confidence"] as num).toDouble(),
+          ),
+        );
+      } else {
+        emit(ECGError("Server error: ${response.statusCode}"));
+      }
+    } catch (e) {
+      emit(ECGError(e.toString()));
+    }
+  }
+}
+===== E:\cardiac_app\lib\core\ecg_state.dart =====
+import 'package:equatable/equatable.dart';
+
+abstract class ECGState extends Equatable {
+  @override
+  List<Object?> get props => [];
+}
+
+class ECGInitial extends ECGState {}
+
+class ECGLoading extends ECGState {}
+
+class ECGSuccess extends ECGState {
+  final String predictedClass;
+  final double confidence;
+
+  ECGSuccess({
+    required this.predictedClass,
+    required this.confidence,
+  });
+
+  @override
+  List<Object?> get props => [predictedClass, confidence];
+}
+
+class ECGError extends ECGState {
+  final String message;
+
+  ECGError(this.message);
+
+  @override
+  List<Object?> get props => [message];
+}
+===== E:\cardiac_app\lib\core\patient_data_model.dart =====
+class XGBoostRequest {
+  final double age;
+  final String sex;
+  final double bmi;
+  final String ageGroup;
+  final String bmiCategory;
+  final String preopHtn;
+  final String preopDm;
+  final String preopEcg;
+  final String preopPft;
+  final double preopHb;
+  final double preopPlt;
+  final double preopPt;
+  final double preopAptt;
+  final double preopNa;
+  final double preopK;
+  final double preopGluc;
+  final double preopAlb;
+  final double preopAst;
+  final double preopAlt;
+  final double preopBun;
+  final double preopCr;
+
+  XGBoostRequest({
+    required this.age,
+    required this.sex,
+    required this.bmi,
+    required this.ageGroup,
+    required this.bmiCategory,
+    required this.preopHtn,
+    required this.preopDm,
+    required this.preopEcg,
+    required this.preopPft,
+    required this.preopHb,
+    required this.preopPlt,
+    required this.preopPt,
+    required this.preopAptt,
+    required this.preopNa,
+    required this.preopK,
+    required this.preopGluc,
+    required this.preopAlb,
+    required this.preopAst,
+    required this.preopAlt,
+    required this.preopBun,
+    required this.preopCr,
+  });
+
+  Map<String, dynamic> toJson() => {
+    "age": age,
+    "sex": sex,
+    "bmi": bmi,
+    "age_group": ageGroup,
+    "bmi_category": bmiCategory,
+    "preop_htn": preopHtn,
+    "preop_dm": preopDm,
+    "preop_ecg": preopEcg,
+    "preop_pft": preopPft,
+    "preop_hb": preopHb,
+    "preop_plt": preopPlt,
+    "preop_pt": preopPt,
+    "preop_aptt": preopAptt,
+    "preop_na": preopNa,
+    "preop_k": preopK,
+    "preop_gluc": preopGluc,
+    "preop_alb": preopAlb,
+    "preop_ast": preopAst,
+    "preop_alt": preopAlt,
+    "preop_bun": preopBun,
+    "preop_cr": preopCr,
+  };
+}
+
+class CnnRequest {
+  final List<double> ecgSignal;
+
+  CnnRequest({required this.ecgSignal});
+
+  Map<String, dynamic> toJson() => {
+    "ecg_signal": ecgSignal,
+  };
+}
+
+class LstmRequest {
+  final List<List<double>> data; // 60 x 6
+
+  LstmRequest({required this.data});
+
+  Map<String, dynamic> toJson() => {
+    "data": data,
+  };
+}
+===== E:\cardiac_app\lib\core\risk_prediction_cubit.dart =====
+import 'dart:convert';
+
+import 'package:cardiac_app/core/patient_data_model.dart';
+import 'package:cardiac_app/core/risk_prediction_state.dart';
+import 'package:cardiac_app/core/risk_result_model.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:http/http.dart' as http;
+
+class RiskPredictionCubit extends Cubit<RiskPredictionState> {
+  RiskPredictionCubit() : super(RiskInitial());
+
+  //final String baseUrl = 'http://192.168.100.6:8000';
+    final String baseUrl = "http://10.0.2.2:8000";
+  Future<RiskPredictionState> predictMiRiskFloat(XGBoostRequest data) async {
+    return _predictRisk(data.toJson(), '/MI_risk_float');
+  }
+
+  Future<RiskPredictionState> predictMiRiskBinary(XGBoostRequest data) async {
+    return _predictRisk(data.toJson(), '/MI_risk_binary');
+  }
+
+  Future<RiskPredictionState> predictHeartFailureFloat(XGBoostRequest data) async {
+    return _predictRisk(data.toJson(), '/heart_failur_risk_float');
+  }
+
+  Future<RiskPredictionState> predictHeartFailureBinary(XGBoostRequest data) async {
+    return _predictRisk(data.toJson(), '/heart_failur_risk_binary');
+  }
+
+  Future<RiskPredictionState> predictCnnRiskFloat(CnnRequest data) async {
+    return _predictRisk(data.toJson(), '/arrhythmia_risk_float');
+  }
+
+  Future<RiskPredictionState> predictCnnRiskBinary(CnnRequest data) async {
+    return _predictRisk(data.toJson(), '/arrhythmia_risk_binary');
+  }
+
+  Future<RiskPredictionState> predictLstmRiskFloat(LstmRequest data) async {
+    return _predictRisk(data.toJson(), '/sca_risk_float');
+  }
+
+  Future<RiskPredictionState> predictLstmRiskBinary(LstmRequest data) async {
+    return _predictRisk(data.toJson(), '/sca_risk_binary');
+  }
+
+  Future<RiskPredictionState> predictAggregatedRisk(Map<String, dynamic> data) async {
+    return _predictRisk(data, '/risk_score');
+  }
+
+  Future<RiskPredictionState> _predictRisk(Map<String, dynamic> body, String endpoint) async {
+    emit(RiskLoading());
+    try {
+
+      final response = await http.post(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+
+        // ðŸ‘‡ Ø§Ù„ØªØ¹Ø§Ù…Ù„ Ù…Ø¹ Ù†ÙˆØ¹ÙŠÙ† Ù…Ù† Ø§Ù„Ù†ØªØ§Ø¦Ø¬
+        final double score = (decoded is bool)
+            ? (decoded ? 1.0 : 0.0) // Ù„Ùˆ boolean Ø®Ù„ÙŠÙ‡ 1 Ø£Ùˆ 0
+            : double.tryParse(decoded.toString()) ?? 0.0;
+
+        final result = RiskPrediction(score: score);
+
+        final successState = RiskSuccess(result);
+        emit(successState);
+        return successState;
+      } else {
+        final error = RiskError('Error ($endpoint): ${response.statusCode}');
+
+        emit(error);
+        return error;
+      }
+    } catch (e) {
+      final error = RiskError('Exception ($endpoint): $e');
+
+      emit(error);
+      return error;
+    }
+  }
+}
+===== E:\cardiac_app\lib\core\risk_prediction_state.dart =====
+import 'risk_result_model.dart';
+
+abstract class RiskPredictionState {}
+
+class RiskInitial extends RiskPredictionState {}
+
+class RiskLoading extends RiskPredictionState {}
+
+class RiskSuccess extends RiskPredictionState {
+  final RiskPrediction result;
+
+  RiskSuccess(this.result);
+}
+
+class RiskError extends RiskPredictionState {
+  final String message;
+
+  RiskError(this.message);
+}
+===== E:\cardiac_app\lib\core\risk_result_model.dart =====
+class RiskPrediction {
+  final double score;
+
+  RiskPrediction({required this.score});
+
+  factory RiskPrediction.fromRawString(String raw) {
+    return RiskPrediction(score: double.parse(raw));
+  }
+}
+===== E:\cardiac_app\lib\main.dart =====
+import 'package:cardiac_app/patient/basic-data.dart';
+import 'package:cardiac_app/patient/patient_date.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:provider/provider.dart';
+import 'core/ecg_cubit.dart';
+import 'core/risk_prediction_cubit.dart';
+import 'notification/local_notification_service.dart';
+import 'notification/notification.dart';
+import 'nurse/NursePatientListScreen.dart';
+import 'theme_provider.dart';
+import 'alert.dart';
+import 'nurse/dashboard.dart';
+import 'auth/login.dart';
+import 'profile.dart';
+import 'auth/sign_up.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp();
+    await EasyLocalization.ensureInitialized();
+    await LocalNotificationService.init();
+    await NotificationService.initFCM();
+  } catch (e, s) {
+    debugPrint("ðŸ”¥ Initialization error: $e");
+    print(s);
+  }
+
+  runApp(
+    EasyLocalization(
+      supportedLocales: const [Locale('en'), Locale('ar')],
+      path: 'assets/langs',
+      fallbackLocale: const Locale('en'),
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider(create: (_) => RiskPredictionCubit()),
+          BlocProvider(create: (_) => ECGCubit()),
+        ],
+        child: MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ],
+          child: const MyApp(),
+        ),
+      ),
+    ),
+  );
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'ICU Cardiac Monitoring',
+      theme: ThemeData.light().copyWith(
+        scaffoldBackgroundColor: Colors.white,
+        cardColor: Colors.white,
+        primaryColor: Colors.blue,
+        iconTheme: const IconThemeData(color: Colors.white),
+        appBarTheme: const AppBarTheme(backgroundColor: Colors.blue),
+      ),
+      darkTheme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: Colors.grey[900],
+        cardColor: Colors.grey[850],
+        primaryColor: Colors.blue[920],
+        iconTheme: const IconThemeData(color: Colors.white),
+        appBarTheme: const AppBarTheme(backgroundColor: Colors.black),
+      ),
+      themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      locale: context.locale,
+      supportedLocales: context.supportedLocales,
+      localizationsDelegates: context.localizationDelegates,
+
+      // â— Ø§Ø³ØªØ®Ø¯Ù… onGenerateRoute Ø¨Ø¯Ù„ routes Ø¹Ø´Ø§Ù† ØªØ¨Ø¹Øª Ø¨ÙŠØ§Ù†Ø§Øª Ù„Ù„Ø´Ø§Ø´Ø§Øª
+      onGenerateRoute: (settings) {
+        if (settings.name == '/alerts') {
+          final args = settings.arguments as Map<String, dynamic>;
+          return MaterialPageRoute(
+            builder: (_) => AlertScreen(currentUserRole: args['role']),
+          );
+        }
+
+        // Ø¨Ø§Ù‚ÙŠ Ø§Ù„Ø±Ø§ÙˆØªØ§Øª Ø§Ù„Ø¹Ø§Ø¯ÙŠØ©
+        switch (settings.name) {
+          case '/':
+            return MaterialPageRoute(builder: (_) => const LoginScreen());
+          case '/signup':
+            return MaterialPageRoute(builder: (_) => const SignUpScreen());
+          case '/profile':
+            return MaterialPageRoute(builder: (_) => const ProfileScreen());
+          case '/HomeScreen':
+          case '/nurse_home':
+          case '/doctor_home':
+            return MaterialPageRoute(builder: (_) => const HomeScreen());
+          case '/patient_home':
+            return MaterialPageRoute(builder: (_) => const BasicInfoScreen());
+          case '/patient_profile':
+            return MaterialPageRoute(builder: (_) => const PatientProfileScreen());
+          case '/PatientList':
+            return MaterialPageRoute(builder: (_) => const NursePatientListScreen());
+          default:
+            return null;
+        }
+      },
+    );
+  }
+}
+===== E:\cardiac_app\lib\notification\local_notification_service.dart =====
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+class LocalNotificationService {
+  static final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
+  FlutterLocalNotificationsPlugin();
+
+  static Future<void> init() async {
+    const AndroidInitializationSettings androidSettings =
+    AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'high_importance_channel', // ðŸ‘ˆ Ù„Ø§Ø²Ù… Ù†ÙØ³ Ø§Ù„Ø§Ø³Ù… Ù†Ø³ØªØ®Ø¯Ù…Ù‡ Ø¨Ø¹Ø¯ÙŠÙ†
+      'High Importance Notifications',
+      description: 'This channel is used for important notifications.',
+      importance: Importance.high,
+    );
+
+    // âœ… Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ù‚Ù†Ø§Ø©
+    await _flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
+
+    const InitializationSettings settings = InitializationSettings(
+      android: androidSettings,
+    );
+
+    // âœ… ØªÙ‡ÙŠØ¦Ø© Ø§Ù„Ø¥Ø´Ø¹Ø§Ø±Ø§Øª
+    await _flutterLocalNotificationsPlugin.initialize(settings);
+
+    // âœ… Ø¹Ø±Ø¶ Ø§Ù„Ø¥Ø´Ø¹Ø§Ø± Ø­ØªÙ‰ ÙˆØ§Ù„ØªØ·Ø¨ÙŠÙ‚ Ù…ÙØªÙˆØ­
+
+  }
+
+  static void showNotification({
+    required String title,
+    required String body,
+  }) {
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'high_importance_channel',
+      'High Importance Notifications',
+      channelDescription: 'This channel is used for important notifications.',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      ticker: 'ticker',
+    );
+
+    const NotificationDetails notificationDetails = NotificationDetails(
+      android: androidDetails,
+    );
+
+    _flutterLocalNotificationsPlugin.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      notificationDetails,
+    );
+  }
+
+}
+===== E:\cardiac_app\lib\notification\notification.dart =====
+import 'dart:convert';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:googleapis_auth/auth_io.dart';
+
+import 'local_notification_service.dart';
+
+const _serviceAccountPath = 'assets/firebase-service-account.json';
+const _firebaseProjectId = 'cardiac-e7644';
+
+Future<void> sendFCMNotificationV1({
+  required String title,
+  required String body,
+}) async {
+  final serviceAccountJson = await rootBundle.loadString(_serviceAccountPath);
+  final accountCredentials = ServiceAccountCredentials.fromJson(serviceAccountJson);
+
+  final scopes = ['https://www.googleapis.com/auth/firebase.messaging'];
+  final client = await clientViaServiceAccount(accountCredentials, scopes);
+
+  final url = Uri.parse('https://fcm.googleapis.com/v1/projects/$_firebaseProjectId/messages:send');
+
+  final messagePayload = {
+    "message": {
+      "topic": "all_users",
+      "notification": {
+        "title": title,
+        "body": body,
+      },
+      "data": {
+        "title": title,
+        "body": body,
+      },
+      "android": {"priority": "high"},
+      "apns": {
+        "headers": {"apns-priority": "10"}
+      }
+    }
+  };
+
+
+  final response = await client.post(
+    url,
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode(messagePayload),
+  );
+
+  if (response.statusCode == 200) {
+    debugPrint('âœ… Notification sent successfully!');
+  } else {
+    debugPrint('âŒ Failed to send notification: ${response.statusCode}');
+    debugPrint(response.body);
+  }
+
+  client.close();
+}
+
+
+
+Future<void> sendFCMToSpecificUser({
+  required String title,
+  required String body,
+  required String userFcmToken,
+}) async {
+  try {
+
+    final serviceAccountJson = await rootBundle.loadString(_serviceAccountPath);
+    final accountCredentials = ServiceAccountCredentials.fromJson(serviceAccountJson);
+
+    final scopes = ['https://www.googleapis.com/auth/firebase.messaging'];
+    final client = await clientViaServiceAccount(accountCredentials, scopes);
+
+    final url = Uri.parse('https://fcm.googleapis.com/v1/projects/$_firebaseProjectId/messages:send');
+
+    final messagePayload = {
+      "message": {
+        "token": userFcmToken,
+        "notification": {
+          "title": title,
+          "body": body,
+        },
+        "data": {
+          "title": title,
+          "body": body,
+        },
+        "android": {"priority": "high"},
+        "apns": {
+          "headers": {"apns-priority": "10"}
+        }
+      }
+    };
+
+    final response = await client.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(messagePayload),
+    );
+
+    if (response.statusCode == 200) {
+      debugPrint('âœ… Notification sent to specific user!');
+    } else {
+      debugPrint('âŒ Failed to send notification: ${response.statusCode}');
+      debugPrint(response.body);
+    }
+
+    client.close();
+  } catch (e) {
+    debugPrint('ðŸ”¥ Error sending FCM: $e');
+  }
+}
+
+
+
+class NotificationService {
+  static Future<void> initFCM() async {
+
+    // âœ… Ù†Ø·Ù„Ø¨ Ø§Ù„ØªØµØ±ÙŠØ­ Ù…Ø¨Ø§Ø´Ø±Ø©Ù‹
+    NotificationSettings settings = await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    // âœ… Ù†Ø·Ø¨Ø¹ Ø§Ù„Ø­Ø§Ù„Ø©
+
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      debugPrint("âœ… ØªÙ… Ø§Ù„Ø³Ù…Ø§Ø­ Ø¨Ø§Ù„Ø¥Ø´Ø¹Ø§Ø±Ø§Øª");
+    } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
+      debugPrint("ðŸŸ¡ Ø³Ù…Ø§Ø­ Ù…Ø¤Ù‚Øª Ø¨Ø§Ù„Ø¥Ø´Ø¹Ø§Ø±Ø§Øª");
+    } else {
+      debugPrint("âŒ ØªÙ… Ø±ÙØ¶ Ø§Ù„Ø¥Ø´Ø¹Ø§Ø±Ø§Øª");
+      // ðŸ’¡ Ù…Ù…ÙƒÙ† ØªØ¹Ø±Ø¶ÙŠ Dialog Ù„Ù„Ù…Ø³ØªØ®Ø¯Ù… ØªÙ‚ÙˆÙ„ÙŠÙ„Ù‡ ÙŠÙØ¹Ù‘Ù„Ù‡Ø§ Ù…Ù† Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª
+    }
+
+    // âœ… Ø§Ù„Ø§Ø´ØªØ±Ø§Ùƒ ÙÙŠ Ø§Ù„ØªÙˆØ¨ÙŠÙƒ
+    await FirebaseMessaging.instance.subscribeToTopic('all_users');
+
+    final token = await FirebaseMessaging.instance.getToken();
+
+    FirebaseMessaging.onMessage.listen((message) {
+
+      final title = message.notification?.title ?? message.data['title'] ?? 'Ø¨Ø¯ÙˆÙ† Ø¹Ù†ÙˆØ§Ù†';
+      final body = message.notification?.body ?? message.data['body'] ?? 'Ø¨Ø¯ÙˆÙ† Ù…Ø­ØªÙˆÙ‰';
+
+
+      LocalNotificationService.showNotification(
+        title: title,
+        body: body,
+      );
+    });
+
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      debugPrint("âœ… Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… ÙØªØ­ Ø§Ù„ØªØ·Ø¨ÙŠÙ‚ Ù…Ù† Ø§Ù„Ø¥Ø´Ø¹Ø§Ø±");
+    });
+  }
+}
+===== E:\cardiac_app\lib\nurse\dashboard.dart =====
+import 'package:cardiac_app/patient_detials.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
+
+import 'NurseEntryScreen.dart';
+
+class PatientCard extends StatelessWidget {
+  final String name;
+  final String id;
+  final int heartRate;
+  final String bp;
+  final int spo2;
+  final String ecgStatus;
+  final String riskLevel;
+  final int systolic;
+  final int diastolic;
+
+  const PatientCard({
+    super.key,
+    required this.name,
+    required this.id,
+    required this.heartRate,
+    required this.bp,
+    required this.spo2,
+    required this.ecgStatus,
+    required this.riskLevel,
+    required this.systolic,
+    required this.diastolic,
+  });
+
+
+
+  Color _getRiskColor(String risk) {
+    switch (risk.toLowerCase()) {
+      case "critical"||"critical risk":
+        return Colors.red;
+      case "moderate"||'moderate risk':
+        return Colors.orange;
+      case "stable"||'non-critical risk':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+  String getBpStatus(int systolic, int diastolic) {
+    if (systolic >= 140 || diastolic >= 90) {
+      return "High";
+    } else if (systolic < 90 || diastolic < 60) {
+      return "Low";
+    } else {
+      return "Normal";
+    }
+  }
+
+  String getLocalizedBpStatus(BuildContext context, int systolic, int diastolic) {
+    final status = getBpStatus(systolic, diastolic);
+    switch (status) {
+      case "High":
+        return "High".tr();
+      case "Low":
+        return "Low".tr();
+      default:
+        return "Normal".tr();
+    }
+  }
+
+  IconData _getEcgIcon(String status) {
+    if (status == "Arrhythmia" || status == "CritArr") {
+      return Icons.warning_amber_rounded;
+    }
+    return Icons.check_circle_outline;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PatientDetailScreen(
+              patientId: id,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            width: .5,
+            color: Theme.of(context).dividerColor,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  name,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () async {
+                    // Ø§Ø³ØªØ±Ø¬Ø§Ø¹ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø±ÙŠØ¶ Ù…Ù† Firestore
+                    final snapshot = await FirebaseFirestore.instance
+                        .collection('patient_data')
+                        .doc(id)
+                        .get();
+
+                    if (snapshot.exists) {
+                      final data = snapshot.data()!;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => NurseEntryScreen(
+                            patientId: id,
+                            patientData: data,
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _getRiskColor(riskLevel),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      riskLevel.tr(),
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                  ),
+                ),
+
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text("#$id", style: Theme.of(context).textTheme.bodyMedium),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text("Heart Rate  | ".tr(), style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  "$heartRate bpm",
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                ),
+                const Spacer(),
+                Text(
+                  ecgStatus == "Arrhythmia" || ecgStatus == "CritArr" ? "Arrhythmia".tr() : "Normal".tr(),
+                  style: TextStyle(
+                    color: ecgStatus == "Arrhythmia" || ecgStatus == "CritArr"
+                        ? Colors.orange
+                        : Colors.green,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+                if (ecgStatus == "Arrhythmia" || ecgStatus == "CritArr") ...[
+                  const SizedBox(width: 4),
+                  Icon(_getEcgIcon(ecgStatus), color: Colors.orange, size: 16),
+                ],
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Text("Blood Pressure  | ".tr(), style: Theme.of(context).textTheme.bodySmall),
+                Text(bp, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
+                const Spacer(),
+                Text(
+                  getLocalizedBpStatus(context, systolic, diastolic),
+                  style: TextStyle(
+                    color: getBpStatus(systolic, diastolic) == "High"
+                        ? Colors.red
+                        : getBpStatus(systolic, diastolic) == "Low"
+                        ? Colors.orange
+                        : Colors.green,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+
+
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Text("SpOâ‚‚  | ".tr(), style: Theme.of(context).textTheme.bodySmall),
+                Text("$spo2%", style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
+
+  String _getEcgStatusFromScore(double? score) {
+    if (score == null) return "Unknown";
+    if (score < 0.33) return "Normal";
+    if (score < 0.50) return "Arrhythmia";
+    return "CritArr";
+  }
+
+  String getRiskLevelFromScore(double? score) {
+    if (score == null) return "Unknown";
+
+    if (score >= 0.0 && score < 0.33) {
+      return "Stable";
+    } else if (score >= 0.33 && score < 0.50) {
+      return "Moderate Risk";
+    } else if (score >= 0.50 && score <= 1.0) {
+      return "Critical Risk";
+    } else {
+      return "Unknown"; // Ù„Ùˆ ÙÙŠÙ‡ Ø±Ù‚Ù… Ø®Ø§Ø±Ø¬ Ø§Ù„Ù†Ø·Ø§Ù‚ Ù„Ø£ÙŠ Ø³Ø¨Ø¨
+    }
+  }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+        title: Text(
+          "Dashboard".tr(),
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search, size: 30),
+            onPressed: () {},
+          ),
+        ],
+      ),
+      bottomNavigationBar: BottomAppBar(
+        color: Theme.of(context).bottomAppBarTheme.color ?? Theme.of(context).primaryColor,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            IconButton(
+              icon: Icon(Icons.dashboard, color: Theme.of(context).iconTheme.color),
+              onPressed: () => Navigator.pushNamed(context, '/nurse_home'),
+            ),
+            IconButton(
+              icon: Icon(Icons.people_sharp, color: Theme.of(context).iconTheme.color),
+              onPressed: () => Navigator.pushNamed(context, '/PatientList'),
+            ),
+            IconButton(
+              icon: Icon(Icons.account_circle, color: Theme.of(context).iconTheme.color),
+              onPressed: () => Navigator.pushNamed(context, '/profile'),
+            ),
+          ],
+        ),
+      ),
+
+
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "ICU Patients".tr(),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('patient_data')
+                    .where('heartRate', isGreaterThan: 0)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return Center(child: Text("No patient data found.".tr()));
+                  }
+
+                  final patients = snapshot.data!.docs;
+
+                  return ListView.builder(
+                    itemCount: patients.length,
+                    itemBuilder: (context, index) {
+                      final p = patients[index].data() as Map<String, dynamic>;
+
+                      return PatientCard(
+                        name: p["name"] ?? "Unknown",
+                        id: patients[index].id,
+                        heartRate: (p["heartRate"] as num?)?.toInt() ?? 0,
+                        spo2: (p["spo2"] as num?)?.toInt() ?? 0,
+                        bp: "${p["bloodPressure"]?["systolic"] ?? '---'}/${p["bloodPressure"]?["diastolic"] ?? '---'}",
+                        systolic: (p["bloodPressure"]?["systolic"] as num?)?.toInt() ?? 0,
+                        diastolic: (p["bloodPressure"]?["diastolic"] as num?)?.toInt() ?? 0,
+                        ecgStatus: _getEcgStatusFromScore((p["ecgRiskScore"] as num?)?.toDouble()),
+                        riskLevel: getRiskLevelFromScore((p["aggregatedRiskScore"] as num?)?.toDouble()),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+}
+===== E:\cardiac_app\lib\nurse\ECGAnalyzeScreen.dart =====
+import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
+import '../core/ecg_cubit.dart';
+import '../core/ecg_state.dart';
+
+class ECGAnalyzeScreen extends StatefulWidget {
+  final String patientId;
+  const ECGAnalyzeScreen({super.key, required this.patientId});
+
+  @override
+  State<ECGAnalyzeScreen> createState() => _ECGAnalyzeScreenState();
+}
+
+class _ECGAnalyzeScreenState extends State<ECGAnalyzeScreen>
+    with TickerProviderStateMixin {
+  File? _filePath;
+  String? predictedClass;
+  double? confidence;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F9FF),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Color(0xff3b82f6)),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          "ECG Analysis".tr(),
+          style: const TextStyle(
+            color: Color(0xff3b82f6),
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            // Image Upload Card
+            GestureDetector(
+              onTap: () => _showImageSourceSheet(),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                height: 280,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  gradient: _filePath == null
+                      ? const LinearGradient(
+                    colors: [Color(0xffebf8ff), Color(0xffdbeafe)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                      : null,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: _filePath == null
+                      ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.monitor_heart,
+                          size: 70, color: Color(0xff3b82f6)),
+                      const SizedBox(height: 16),
+                      Text(
+                        "Tap to upload ECG image".tr(),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xff1e40af),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "Supports JPG, PNG".tr(),
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                    ],
+                  )
+                      : Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.file(_filePath!, fit: BoxFit.cover),
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withOpacity(0.5)
+                            ],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _filePath = null;
+                              predictedClass = null;
+                              confidence = null;
+                            });
+                            context.read<ECGCubit>().emit(ECGInitial());
+                          },
+                          child: const CircleAvatar(
+                            radius: 18,
+                            backgroundColor: Colors.redAccent,
+                            child: Icon(Icons.close, color: Colors.white, size: 20),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            // Analyze Button
+            BlocBuilder<ECGCubit, ECGState>(
+              builder: (context, state) {
+                bool isLoading = state is ECGLoading;
+                return AnimatedScale(
+                  scale: isLoading ? 0.95 : 1.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 60,
+                    child: ElevatedButton(
+                      onPressed: _filePath == null || isLoading
+                          ? null
+                          : () {
+                        context.read<ECGCubit>().predictECG(_filePath!);
+                        _animationController.forward(from: 0);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xff3b82f6),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        elevation: 8,
+                        shadowColor: const Color(0xff3b82f6).withOpacity(0.4),
+                      ),
+                      child: isLoading
+                          ? const SizedBox(
+                        height: 28,
+                        width: 28,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 3,
+                        ),
+                      )
+                          : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.analytics, size: 26),
+                          const SizedBox(width: 12),
+                          Text(
+                            "Analyze ECG".tr(),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            const SizedBox(height: 30),
+
+            BlocListener<ECGCubit, ECGState>(
+              listener: (context, state) {
+                if (state is ECGSuccess) {
+                  setState(() {
+                    predictedClass = state.predictedClass;
+                    confidence = state.confidence;
+                  });
+                  _animationController.forward(from: 0);
+                } else if (state is ECGError) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Analysis failed. Please try again.".tr()),
+                      backgroundColor: Colors.redAccent,
+                    ),
+                  );
+                }
+              },
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: predictedClass != null && confidence != null
+                    ? Card(
+                  elevation: 12,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xffdbeafe), Color(0xffbfdbfe)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 30,
+                              backgroundColor: _getResultColor(),
+                              child: Icon(
+                                _getResultIcon(),
+                                color: Colors.white,
+                                size: 32,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Diagnosis Result".tr(),
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xff1e3a8a),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    predictedClass!,
+                                    style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xff1e40af),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Confidence Level".tr(),
+                                  style: TextStyle(color: Colors.grey[700]),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "${(confidence! * 100).toStringAsFixed(1)}%",
+                                  style: const TextStyle(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xff1d4ed8),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                await FirebaseFirestore.instance
+                                    .collection('patient_data')
+                                    .doc(widget.patientId)
+                                    .update({
+                                  'ecg_prediction': predictedClass,
+                                  'ecg_confidence': confidence,
+                                  'ecg_image_path': _filePath?.path ?? '',
+                                  'ecg_timestamp': Timestamp.now(),
+                                });
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Saved to patient record'.tr()),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              },
+                              icon: const Icon(Icons.save_alt),
+                              label: Text("Save".tr()),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green[600],
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 20, vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                    : const SizedBox.shrink(),
+              ),
+            ),
+
+            const SizedBox(height: 30),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showImageSourceSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 50,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Color(0xff3b82f6), size: 28),
+              title: Text("Take Photo".tr(), style: const TextStyle(fontSize: 18)),
+              onTap: () => _pickImage(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Color(0xff3b82f6), size: 28),
+              title: Text("Choose from Gallery".tr(), style: const TextStyle(fontSize: 18)),
+              onTap: () => _pickImage(ImageSource.gallery),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _pickImage(ImageSource source) async {
+    final XFile? photo = await ImagePicker().pickImage(source: source);
+    if (photo != null) {
+      setState(() {
+        _filePath = File(photo.path);
+        predictedClass = null;
+        confidence = null;
+      });
+      context.read<ECGCubit>().emit(ECGInitial());
+    }
+    Navigator.pop(context);
+  }
+
+  Color _getResultColor() {
+    if (predictedClass == null) return Colors.grey;
+    return predictedClass!.toLowerCase().contains("normal")
+        ? Colors.green
+        : Colors.orangeAccent;
+  }
+
+  IconData _getResultIcon() {
+    return predictedClass?.toLowerCase().contains("normal") ?? false
+        ? Icons.favorite
+        : Icons.warning_amber;
+  }
+}
+===== E:\cardiac_app\lib\nurse\NurseEntryScreen.dart =====
+import 'package:cardiac_app/core/risk_prediction_cubit.dart';
+import 'package:cardiac_app/core/risk_prediction_state.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../core/patient_data_model.dart';
+import '../notification/notification.dart';
+import 'ECGAnalyzeScreen.dart';
+
+class NurseEntryScreen extends StatefulWidget {
+  final String patientId;
+  final Map<String, dynamic> patientData;
+
+  const NurseEntryScreen({
+    super.key,
+    required this.patientId,
+    required this.patientData,
+  });
+
+  @override
+  State<NurseEntryScreen> createState() => _NurseEntryScreenState();
+}
+
+class _NurseEntryScreenState extends State<NurseEntryScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _heartRate = TextEditingController();
+  final _spo2 = TextEditingController();
+  final _systolic = TextEditingController();
+  final _diastolic = TextEditingController();
+  final _ecg = TextEditingController();
+  final _respiratoryRateController = TextEditingController();
+
+
+
+  final _hbController = TextEditingController();
+  final _pltController = TextEditingController();
+  final _ptController = TextEditingController();
+  final _apttController = TextEditingController();
+  final _naController = TextEditingController();
+  final _kController = TextEditingController();
+  final _glucController = TextEditingController();
+  final _albController = TextEditingController();
+  final _astController = TextEditingController();
+  final _altController = TextEditingController();
+  final _bunController = TextEditingController();
+  final _crController = TextEditingController();
+
+  String? _selectedHtn;
+  String? _selectedDm;
+  String? _selectedEcg;
+  String? _selectedPft;
+  String? _selectedBmiCategory;
+  String? _selectedAgeGroup;
+
+  @override
+  void initState() {
+    super.initState();
+    final data = widget.patientData;
+
+    if (data['heartRate'] != null) _heartRate.text = data['heartRate'].toString();
+    if (data['spo2'] != null) _spo2.text = data['spo2'].toString();
+    if (data['respiratoryRate'] != null) _respiratoryRateController.text = data['respiratoryRate'].toString();
+    if (data['bloodPressure'] != null) {
+      final bp = data['bloodPressure'] as Map<String, dynamic>;
+      if (bp['systolic'] != null) _systolic.text = bp['systolic'].toString();
+      if (bp['diastolic'] != null) _diastolic.text = bp['diastolic'].toString();
+    }
+    if (data['ecgWaveform'] != null && data['ecgWaveform'] is List) {
+      final ecgList = List.from(data['ecgWaveform']);
+      _ecg.text = ecgList.join(',');
+    }
+
+
+    _hbController.text = data['preop_hb']?.toString() ?? '';
+    _pltController.text = data['preop_plt']?.toString() ?? '';
+    _ptController.text = data['preop_pt']?.toString() ?? '';
+    _apttController.text = data['preop_aptt']?.toString() ?? '';
+    _naController.text = data['preop_na']?.toString() ?? '';
+    _kController.text = data['preop_k']?.toString() ?? '';
+    _glucController.text = data['preop_gluc']?.toString() ?? '';
+    _albController.text = data['preop_alb']?.toString() ?? '';
+    _astController.text = data['preop_ast']?.toString() ?? '';
+    _altController.text = data['preop_alt']?.toString() ?? '';
+    _bunController.text = data['preop_bun']?.toString() ?? '';
+    _crController.text = data['preop_cr']?.toString() ?? '';
+
+    _selectedHtn = data['preop_htn'];
+    _selectedDm = data['preop_dm'];
+    _selectedEcg = data['preop_ecg'];
+    _selectedPft = data['preop_pft'];
+    _selectedAgeGroup = data['age_group'];
+    _selectedBmiCategory = data['bmi_category'];
+  }
+  String getRiskLevelFromScore(double? score) {
+    if (score == null) return "Unknown";
+
+    if (score >= 0.0 && score < 0.33) {
+      return "Stable";
+    } else if (score >= 0.33 && score < 0.66) {
+      return "Moderate Risk";
+    } else if (score >= 0.66 && score <= 1.0) {
+      return "Critical Risk";
+    } else {
+      return "Unknown"; // Ù„Ùˆ ÙÙŠÙ‡ Ø±Ù‚Ù… Ø®Ø§Ø±Ø¬ Ø§Ù„Ù†Ø·Ø§Ù‚ Ù„Ø£ÙŠ Ø³Ø¨Ø¨
+    }
+  }
+  final bmiOptions = ['underweight', 'normal', 'overweight', 'obese'];
+  final ageGroupOptions = ['young', 'middle', 'senior', 'elderly'];
+
+  final ecgOptions = [
+    "Normal Sinus Rhythm",
+    "Left anterior fascicular block",
+    "1st degree A-V block, Left bundle branch block",
+    "1st degree A-V block",
+    "Atrial fibrillation",
+    "Incomplete right bundle branch block, Left anterior fascicular block",
+    "Atrial fibrillation, Right bundle branch block",
+    "Premature supraventricular and ventricular complexes, Right bundle branch block",
+    "Atrial fibrillation with slow ventricular response",
+    "Right bundle branch block",
+    "Incomplete right bundle branch block",
+    "Left anterior hemiblock",
+    "Atrial fibrillation with rapid ventricular response",
+    "Premature ventricular complexes",
+    "Left posterior fascicular block",
+    "Atrial fibrillation with premature ventricular, Incomplete left bundle block",
+    "Premature atrial complexes",
+    "1st degree A-V block with Premature supraventricular complexes, Left bundle branch block",
+    "1st degree A-V block with Premature atrial complexes",
+    "Atrial fibrillation with premature ventricular or aberrantly conducted complexes",
+    "Atrial flutter with 2:1 A-V conduction",
+    "Premature supraventricular complexes",
+    "Electronic ventricular pacemaker",
+    "AV sequential or dual chamber electronic pacemaker",
+    "Right bundle branch block, Left anterior fascicular block",
+    "Complete right bundle branch block, occasional premature supraventricular complexes",
+    "Atrial flutter with variable A-V block"
+  ];
+
+  final pftOptions = [
+    'Normal', 'Mild obstructive', 'Mild restrictive', 'Moderate obstructive',
+    'Borderline obstructive', 'Mixed or pure obstructive', 'Severe restrictive',
+    'Moderate restrictive', 'Severe obstructive'
+  ];
+
+  @override
+  void dispose() {
+    _heartRate.dispose();
+    _spo2.dispose();
+    _systolic.dispose();
+    _diastolic.dispose();
+    _ecg.dispose();
+    _respiratoryRateController.dispose();
+
+
+    _hbController.dispose();
+    _pltController.dispose();
+    _ptController.dispose();
+    _apttController.dispose();
+    _naController.dispose();
+    _kController.dispose();
+    _glucController.dispose();
+    _albController.dispose();
+    _astController.dispose();
+    _altController.dispose();
+    _bunController.dispose();
+    _crController.dispose();
+    super.dispose();
+  }
+
+
+  void _submitMedicalData() async {
+    if (!_formKey.currentState!.validate()) {
+      debugPrint("âš ï¸ Form validation failed");
+      return;
+    }
+    debugPrint("âœ… widget.patientId: ${widget.patientId}");
+
+    try {
+      debugPrint("â³ Start parsing vitals...");
+      final parsedHeartRate = double.tryParse(_heartRate.text) ?? 0.0;
+      final parsedSystolic = double.tryParse(_systolic.text) ?? 0.0;
+      final parsedDiastolic = double.tryParse(_diastolic.text) ?? 0.0;
+      final parsedSpO2 = double.tryParse(_spo2.text) ?? 0.0;
+      final parsedRespRate = double.tryParse(_respiratoryRateController.text) ?? 0.0;
+      final ecgList = _parseEcgList(_ecg.text);
+
+      debugPrint("âœ… Vitals parsed successfully");
+
+      final xgbData = XGBoostRequest(
+        age: double.tryParse(widget.patientData['age']?.toString() ?? "0") ?? 0,
+        sex: widget.patientData['sex']?.toString() ?? 'F',
+        bmi: double.tryParse(widget.patientData['bmi']?.toString() ?? "0") ?? 0,
+        ageGroup: _selectedAgeGroup ?? "unknown",
+        bmiCategory: _selectedBmiCategory ?? "unknown",
+        preopHtn: _selectedHtn ?? "N",
+        preopDm: _selectedDm ?? "N",
+        preopEcg: _selectedEcg ?? "Normal",
+        preopPft: _selectedPft ?? "Normal",
+        preopHb: double.tryParse(_hbController.text) ?? 0,
+        preopPlt: double.tryParse(_pltController.text) ?? 0,
+        preopPt: double.tryParse(_ptController.text) ?? 0,
+        preopAptt: double.tryParse(_apttController.text) ?? 0,
+        preopNa: double.tryParse(_naController.text) ?? 0,
+        preopK: double.tryParse(_kController.text) ?? 0,
+        preopGluc: double.tryParse(_glucController.text) ?? 0,
+        preopAlb: double.tryParse(_albController.text) ?? 0,
+        preopAst: double.tryParse(_astController.text) ?? 0,
+        preopAlt: double.tryParse(_altController.text) ?? 0,
+        preopBun: double.tryParse(_bunController.text) ?? 0,
+        preopCr: double.tryParse(_crController.text) ?? 0,
+      );
+
+      debugPrint("âœ… XGBoostRequest created");
+
+      final lstmData = LstmRequest(
+        data: [
+          [
+            parsedHeartRate,
+            parsedSystolic,
+            parsedDiastolic,
+            double.parse(((parsedSystolic + parsedDiastolic) / 2).toStringAsFixed(1)),
+            parsedSpO2,
+            parsedRespRate,
+          ]
+        ],
+      );
+      debugPrint("âœ… LSTMRequest created");
+
+      final cnnData = CnnRequest(ecgSignal: ecgList);
+      debugPrint("âœ… CNNRequest created");
+
+      final cubit = context.read<RiskPredictionCubit>();
+      final aggregatedRequest = {
+        ...xgbData.toJson(),
+        "ecg_signal": ecgList,
+        "lstm_data": lstmData.data,
+      };
+
+      debugPrint("ðŸš€ Sending requests to cubit...");
+      final results = await Future.wait([
+        cubit.predictMiRiskFloat(xgbData),
+        cubit.predictMiRiskBinary(xgbData),
+        cubit.predictHeartFailureFloat(xgbData),
+        cubit.predictHeartFailureBinary(xgbData),
+        cubit.predictCnnRiskFloat(cnnData),
+        cubit.predictCnnRiskBinary(cnnData),
+        cubit.predictLstmRiskFloat(lstmData),
+        cubit.predictLstmRiskBinary(lstmData),
+        cubit.predictAggregatedRisk(aggregatedRequest),
+      ]);
+      debugPrint("âœ… Predictions received");
+      for (int i = 0; i < results.length; i++) {
+        if (results[i] is RiskError) {
+          final err = results[i] as RiskError;
+          debugPrint("âŒ Result[$i] Error: ${err.message}");
+        } else {
+          debugPrint("âœ… Result[$i]: ${results[i]}");
+        }
+      }
+
+      double? miScore, miBinary;
+      double? hfScore, hfBinary;
+      double? cnnScore, cnnBinary;
+      double? lstmScore, lstmBinary;
+      double? totalScore;
+
+      if (results[0] is RiskSuccess) miScore = (results[0] as RiskSuccess).result.score;
+      if (results[1] is RiskSuccess) miBinary = (results[1] as RiskSuccess).result.score;
+      if (results[2] is RiskSuccess) hfScore = (results[2] as RiskSuccess).result.score;
+      if (results[3] is RiskSuccess) hfBinary = (results[3] as RiskSuccess).result.score;
+      if (results[4] is RiskSuccess) cnnScore = (results[4] as RiskSuccess).result.score;
+      if (results[5] is RiskSuccess) cnnBinary = (results[5] as RiskSuccess).result.score;
+      if (results[6] is RiskSuccess) lstmScore = (results[6] as RiskSuccess).result.score;
+      if (results[7] is RiskSuccess) lstmBinary = (results[7] as RiskSuccess).result.score;
+      if (results[8] is RiskSuccess) totalScore = (results[8] as RiskSuccess).result.score;
+
+      if ([miScore, miBinary, hfScore, hfBinary, cnnScore, cnnBinary, lstmScore, lstmBinary, totalScore]
+          .any((e) => e != null)) {
+        debugPrint("ðŸ“ Updating Firestore...");
+        await FirebaseFirestore.instance.collection('patient_data').doc(widget.patientId).update({
+          'heartRate': parsedHeartRate,
+          'spo2': parsedSpO2,
+          'respiratoryRate': parsedRespRate,
+          'bloodPressure': {
+            'systolic': parsedSystolic,
+            'diastolic': parsedDiastolic,
+          },
+          'ecgWaveform': ecgList,
+          'miRiskScore': miScore,
+          'miRiskBinary': miBinary,
+          'heartFailureRiskScore': hfScore,
+          'heartFailureRiskBinary': hfBinary,
+          'ecgRiskScore': cnnScore,
+          'ecgRiskBinary': cnnBinary,
+          'vitalSignsRiskScore': lstmScore,
+          'vitalSignsRiskBinary': lstmBinary,
+          'aggregatedRiskScore': totalScore,
+          'glucose': double.tryParse(_glucController.text) ?? 0,
+          'riskUpdatedAt': DateTime.now(),
+          'updatedByNurseAt': Timestamp.now(),
+          ...xgbData.toJson(),
+        });
+        debugPrint("âœ… Firestore updated");
+
+        /// ðŸŸ¡ Ø¥Ø±Ø³Ø§Ù„ Ø¥Ø´Ø¹Ø§Ø±Ø§Øª Ø¨Ø¹Ø¯ Ø§Ù„ØªØ­Ø¯ÙŠØ«
+        final level = getRiskLevelFromScore(totalScore);
+        final valuesText =
+            'ðŸ«€ Heart Rate: $parsedHeartRate bpm\nðŸ©¸ BP: $parsedSystolic/$parsedDiastolic mmHg\nðŸ§ª SpO2: $parsedSpO2%';
+
+        try {
+          debugPrint("ðŸ“¡ Sending notifications...");
+          final userDoc = await FirebaseFirestore.instance.collection('users').doc(widget.patientId).get();
+          final patientName = userDoc.data()?['name'] ?? 'Unknown';
+          final patientToken = userDoc.data()?['fcmToken'];
+
+          if (patientToken != null) {
+            final patientMessage =
+                "Your latest health risk level is: $level.\n\n$valuesText";
+
+            await sendFCMToSpecificUser(
+              title: "ðŸ©º Your Risk Status: $level",
+              body: patientMessage,
+              userFcmToken: patientToken,
+            );
+
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(widget.patientId)
+                .collection('notifications')
+                .add({
+              'title': "ðŸ©º Your Risk Status: $level",
+              'body': patientMessage,
+              'risk': level,
+              'sentAt': Timestamp.now(),
+            });
+          }
+
+          final staffSnapshot = await FirebaseFirestore.instance
+              .collection('users')
+              .where('role', whereIn: ['Nurse', 'Doctor'])
+              .get();
+
+          for (var doc in staffSnapshot.docs) {
+            final staffToken = doc.data()['fcmToken'];
+            final staffId = doc.id;
+
+            if (staffToken != null) {
+              final staffMessage =
+                  "$patientName is currently at $level level.\n\n$valuesText";
+
+              await sendFCMToSpecificUser(
+                title: "ðŸš¨ Alert: $patientName is $level",
+                body: staffMessage,
+                userFcmToken: staffToken,
+              );
+              await FirebaseFirestore.instance.collection('notifications').add({
+                'title': "ðŸš¨ Alert: $patientName is $level",
+                'body': staffMessage,
+                'timestamp': FieldValue.serverTimestamp(),
+                'targetRole': doc.data()['role'],
+                'name': patientName,
+                'alert': "$patientName is currently at $level level.",
+                'risk': level,
+                'valuesData': valuesText,
+              });
+            }
+          }
+          debugPrint("âœ… Notifications sent");
+        } catch (e) {
+          debugPrint("âŒ Failed to send notifications: $e");
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'âœ… MI: $miScore ($miBinary) | HF: $hfScore ($hfBinary) | ECG: $cnnScore ($cnnBinary) | Vitals: $lstmScore ($lstmBinary) | Total: $totalScore'),
+          ),
+        );
+        Navigator.pop(context);
+      } else {
+        debugPrint("âš ï¸ Prediction results were null");
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('âŒ ÙØ´Ù„ ÙÙŠ Ø§Ù„ØªÙ†Ø¨Ø¤ Ø¨Ø§Ù„Ø®Ø·ÙˆØ±Ø©')),
+        );
+      }
+    } catch (e) {
+      debugPrint("âŒ Exception caught in _submitMedicalData: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('âŒ Error: ${e.toString()}')),
+      );
+    }
+  }
+
+
+  List<double> _parseEcgList(String input) {
+    return input
+        .split(',')
+        .map((e) => double.tryParse(e.trim()))
+        .whereType<double>()
+        .toList();
+  }
+
+  Widget _buildDropdown(String label, String? value, List<String> options, void Function(String?) onChanged) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              isExpanded: true,
+              value: value,
+              items: options.map((e) {
+                return DropdownMenuItem<String>(
+                  value: e, // Ø§Ù„Ù‚ÙŠÙ…Ø© Ø§Ù„ÙØ¹Ù„ÙŠØ© (ØºÙŠØ± Ù…ØªØ±Ø¬Ù…Ø©)
+                  child: Text(e.tr()), // Ø¹Ø±Ø¶ Ø§Ù„ØªØ±Ø¬Ù…Ø© ÙÙ‚Ø·
+                );
+              }).toList(),
+              decoration: InputDecoration(
+                labelText: label,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onChanged: onChanged,
+              validator: (val) => (val == null || val.isEmpty) ? 'Required'.tr() : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  @override
+  Widget build(BuildContext context) {
+    final data = widget.patientData;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          '${'Update'.tr()}: ${data['name'] ?? 'Patient'}',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            children: [
+              Text('Basic Info'.tr(), style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Text('${'Name'.tr()}: ${data['name'] ?? ''}'),
+              Text('${'Age'.tr()}: ${data['age'] ?? ''}'),
+              Text('${'Gender'.tr()}: ${data['gender'] ?? ''}'),
+              const Divider(height: 32),
+
+              _buildField('Heart Rate'.tr(), _heartRate),
+              _buildField('SpO2'.tr(), _spo2),
+              _buildField('Respiratory Rate'.tr(), _respiratoryRateController),
+
+              _buildCard([
+                _buildField('Systolic BP'.tr(), _systolic),
+                _buildField('Diastolic BP'.tr(), _diastolic),
+              ]),
+
+
+              _buildField('ECG (12 values)'.tr(), _ecg),
+              const Divider(height: 32),
+              Text('Pre-op Medical Data'.tr(), style: Theme.of(context).textTheme.titleMedium),
+
+              _buildDropdown('BMI Category'.tr(), _selectedBmiCategory,
+                  bmiOptions, (val) => setState(() => _selectedBmiCategory = val)),
+              _buildDropdown('Age Group'.tr(), _selectedAgeGroup,
+                  ageGroupOptions, (val) => setState(() => _selectedAgeGroup = val)),
+
+              _buildDropdown('Pre-op Hypertension'.tr(), _selectedHtn, ['N', 'Y'], (val) => setState(() => _selectedHtn = val)),
+              _buildDropdown('Pre-op Diabetes'.tr(), _selectedDm, ['N', 'Y'], (val) => setState(() => _selectedDm = val)),
+              _buildDropdown('Pre-op ECG'.tr(), _selectedEcg,
+                  ecgOptions, (val) => setState(() => _selectedEcg = val)),
+
+              _buildDropdown('Pre-op PFT'.tr(), _selectedPft,
+                  pftOptions, (val) => setState(() => _selectedPft = val)),
+
+              _buildCard([
+                _buildField('Pre-op Hb'.tr(), _hbController),
+                _buildField('Pre-op PLT'.tr(), _pltController),
+                _buildField('Pre-op PT'.tr(), _ptController),
+                _buildField('Pre-op APTT'.tr(), _apttController),
+              ]),
+              _buildCard([
+                _buildField('Pre-op Na'.tr(), _naController),
+                _buildField('Pre-op K'.tr(), _kController),
+                _buildField('Pre-op Glucose'.tr(), _glucController),
+                _buildField('Pre-op Albumin'.tr(), _albController),
+              ]),
+              _buildCard([
+                _buildField('Pre-op AST'.tr(), _astController),
+                _buildField('Pre-op ALT'.tr(), _altController),
+                _buildField('Pre-op BUN'.tr(), _bunController),
+                _buildField('Pre-op Cr'.tr(), _crController),
+              ]),
+              const SizedBox(height: 10),
+
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => ECGAnalyzeScreen(patientId: widget.patientId,)),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue[600],
+                  padding: const EdgeInsets.symmetric(horizontal: 82, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.show_chart, color: Colors.white),
+                label:  Text("Analyze ECG".tr(), style: const TextStyle(fontSize: 20, color: Colors.white)),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _submitMedicalData,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue[600],
+                  padding: const EdgeInsets.symmetric(horizontal: 82, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text('Submit'.tr(), style: const TextStyle(fontSize: 20, color: Colors.white)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCard(List<Widget> children) {
+    return Card(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12),side:BorderSide(width: .5)),
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 3,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(children: children),
+      ),
+    );
+  }
+
+  Widget _buildField(String label, TextEditingController controller) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: TextFormField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        validator: (val) => (val == null || val.isEmpty) ? 'Required'.tr() : null,
+      ),
+    );
+  }
+}
+===== E:\cardiac_app\lib\nurse\NursePatientListScreen.dart =====
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'NurseEntryScreen.dart';
+import 'package:easy_localization/easy_localization.dart';
+
+class NursePatientListScreen extends StatelessWidget {
+  const NursePatientListScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("All Patients".tr(), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+      ),
+      bottomNavigationBar: BottomAppBar(
+        color: Theme.of(context).bottomAppBarTheme.color ?? Theme.of(context).primaryColor,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            IconButton(
+              icon: Icon(Icons.dashboard, color: Theme.of(context).iconTheme.color),
+              onPressed: () => Navigator.pushNamed(context, '/nurse_home'),
+            ),
+            IconButton(
+              icon: Icon(Icons.people_sharp, color: Theme.of(context).iconTheme.color),
+              onPressed: () => Navigator.pushNamed(context, '/PatientList'),
+            ),
+            IconButton(
+              icon: Icon(Icons.account_circle, color: Theme.of(context).iconTheme.color),
+              onPressed: () => Navigator.pushNamed(context, '/profile'),
+            ),
+          ],
+        ),
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('patient_data').snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final docs = snapshot.data?.docs ?? [];
+
+          final filteredDocs = docs.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return data['heartRate'] == null;
+          }).toList();
+
+          if (filteredDocs.isEmpty) {
+            return Center(
+              child: Text(
+                "No incomplete patients.".tr(),
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            );
+          }
+
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: filteredDocs.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              final data = filteredDocs[index].data() as Map<String, dynamic>;
+              final docId = filteredDocs[index].id;
+
+              return Container(
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    width: .5,
+                    color: Theme.of(context).dividerColor,
+                  ),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  leading: CircleAvatar(
+                    backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                    child: const Icon(Icons.person, color: Colors.blue),
+                  ),
+                  title: Text(data['name'] ?? 'Unnamed', style: Theme.of(context).textTheme.titleMedium),
+                  subtitle: Text(
+                    "${"Age".tr()}: ${data['age'] ?? '--'}, ${"Gender".tr()}: ${data['gender'] ?? '--'}",
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => NurseEntryScreen(
+                          patientId: docId,
+                          patientData: data,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+===== E:\cardiac_app\lib\patient\basic-data.dart =====
+import 'package:cardiac_app/patient/patient_date.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+
+class BasicInfoScreen extends StatefulWidget {
+  const BasicInfoScreen({super.key});
+
+  @override
+  State<BasicInfoScreen> createState() => _BasicInfoScreenState();
+}
+
+class _BasicInfoScreenState extends State<BasicInfoScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _age = TextEditingController();
+  final _gender = TextEditingController();
+  final _weight = TextEditingController();
+  final _height = TextEditingController();
+
+  String? _selectedSex;
+
+  double _calculateBMI() {
+    final weight = double.tryParse(_weight.text) ?? 0;
+    final heightCm = double.tryParse(_height.text) ?? 0;
+    final heightM = heightCm / 100;
+
+    if (heightM == 0) return 0.0;
+
+    final bmi = weight / (heightM * heightM);
+    return double.parse(bmi.toStringAsFixed(1));
+  }
+
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _age.dispose();
+    _gender.dispose();
+    _weight.dispose();
+    _height.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitBasicData() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    if (_formKey.currentState!.validate()) {
+      await FirebaseFirestore.instance.collection('patient_data').doc(uid).set({
+        'uid': uid,
+        'name': _name.text.trim(),
+        'age': int.tryParse(_age.text) ?? 0,
+        'gender': _selectedSex!,
+        'weight': double.tryParse(_weight.text) ?? 0.0,
+        'height': double.tryParse(_height.text) ?? 0.0,
+        'bmi': _calculateBMI(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const PatientProfileScreen()),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title:  Text("Patient Info".tr(),style: TextStyle(
+        fontSize: 34,
+        fontWeight: FontWeight.bold,
+      ),)),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            children: [
+              _buildField("Name".tr(), _name),
+              _buildField("Age".tr(), _age, isNum: true),
+              _buildDropdown('Gender'.tr(), _selectedSex, ['F', 'M'], (val) => setState(() => _selectedSex = val)),
+              _buildField("Weight (kg)".tr(), _weight, isNum: true),
+              _buildField("Height (cm)".tr(), _height, isNum: true),
+              const SizedBox(height: 20),
+              ElevatedButton(onPressed: _submitBasicData,   style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(50),
+                backgroundColor: Colors.blue,
+              ),child: Text("Submit".tr(), style: const TextStyle(color: Colors.white))),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  Widget _buildDropdown(String label, String? value, List<String> options, void Function(String?) onChanged) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              isExpanded: true, // Ù…Ù‡Ù… Ø¬Ø¯Ø§Ù‹
+              value: value,
+              items: options.map((e) {
+                return DropdownMenuItem<String>(
+                  value: e,
+                  child: Text(
+                    e,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                );
+              }).toList(),
+              decoration: InputDecoration(
+                labelText: label,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onChanged: onChanged,
+              validator: (val) => (val == null || val.isEmpty) ? 'Required'.tr() : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildField(String label, TextEditingController controller, {bool isNum = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextFormField(
+        controller: controller,
+        keyboardType: isNum ? TextInputType.number : TextInputType.text,
+        decoration: InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        validator: (val) => (val == null || val.isEmpty) ? "Required".tr() : null,
+      ),
+    );
+  }
+}
+===== E:\cardiac_app\lib\patient\patient_date.dart =====
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:syncfusion_flutter_charts/charts.dart';
+
+class PatientProfileScreen extends StatelessWidget {
+  const PatientProfileScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    Map<String, dynamic> getRiskDisplay(double? score) {
+      if (score == null) {
+        return {
+          'color': Colors.grey,
+          'icon': Icons.help_outline,
+          'label': 'Unknown'.tr(),
+        };
+      }
+
+      if (score >= 0.0 && score < 0.33) {
+        return {
+          'color': Colors.green,
+          'icon': Icons.check_circle_rounded,
+          'label': 'Stable'.tr(),
+        };
+      } else if (score >= 0.33 && score < 0.50) {
+        return {
+          'color': Colors.orange,
+          'icon': Icons.report_problem_rounded,
+          'label': 'Moderate Risk'.tr(),
+        };
+      } else if (score >= 0.50 && score <= 1.0) {
+        return {
+          'color': Colors.red,
+          'icon': Icons.warning_amber_rounded,
+          'label': 'Critical Risk'.tr(),
+        };
+      } else {
+        return {
+          'color': Colors.grey,
+          'icon': Icons.help_outline,
+          'label': 'Unknown'.tr(),
+        };
+      }
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          "Your Profile".tr(),
+          style: Theme.of(
+            context,
+          ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+      ),
+      bottomNavigationBar: BottomAppBar(
+        color:
+            Theme.of(context).bottomAppBarTheme.color ??
+            Theme.of(context).primaryColor,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            IconButton(
+              icon: Icon(
+                Icons.dashboard,
+                color: Theme.of(context).iconTheme.color,
+              ),
+              onPressed: () => Navigator.pushNamed(context, '/patient_profile'),
+            ),
+
+            IconButton(
+              icon: Icon(
+                Icons.account_circle,
+                color: Theme.of(context).iconTheme.color,
+              ),
+              onPressed: () => Navigator.pushNamed(context, '/profile'),
+            ),
+          ],
+        ),
+      ),
+
+      body: FutureBuilder<DocumentSnapshot>(
+        future:
+            FirebaseFirestore.instance
+                .collection('patient_data')
+                .doc(uid)
+                .get(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final data = snapshot.data!.data() as Map<String, dynamic>?;
+
+          if (data == null) {
+            return Center(child: Text("No data found.".tr()));
+          }
+
+          final medicalHistory = data['medicalHistory'] as List<dynamic>? ?? [];
+          final aggregatedScore =
+              (data['aggregatedRiskScore'] as num?)?.toDouble();
+          final overallVisual = getRiskDisplay(aggregatedScore);
+          final miScore = (data['miRiskScore'] as num?)?.toDouble();
+          final hfScore = (data['heartFailureRiskScore'] as num?)?.toDouble();
+          final ecgScore = (data['ecgRiskScore'] as num?)?.toDouble();
+          final vitalsScore = (data['vitalSignsRiskScore'] as num?)?.toDouble();
+
+          final miVisual = getRiskDisplay(miScore);
+          final hfVisual = getRiskDisplay(hfScore);
+          final ecgVisual = getRiskDisplay(ecgScore);
+          final vitalsVisual = getRiskDisplay(vitalsScore);
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ðŸ‘¤ Basic Info Card
+                Card(
+                  elevation: 2,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.person, color: Colors.blue),
+                          title: Text("Name".tr()),
+                          subtitle: Text(data['name'] ?? ''),
+                        ),
+                        const Divider(),
+                        ListTile(
+                          leading: const Icon(Icons.cake, color: Colors.purple),
+                          title: Text("Age".tr()),
+                          subtitle: Text("${data['age'] ?? ''}"),
+                        ),
+                        const Divider(),
+                        ListTile(
+                          leading: const Icon(Icons.wc, color: Colors.pink),
+                          title: Text("Gender".tr()),
+                          subtitle: Text(data['gender'] ?? ''),
+                        ),
+                        const Divider(),
+                        ListTile(
+                          leading: const Icon(
+                            Icons.fitness_center,
+                            color: Colors.orange,
+                          ),
+                          title: Text("BMI".tr()),
+                          subtitle: Text("${data['bmi'] ?? ''}"),
+                        ),
+
+                      ],
+                    ),
+                  ),
+                ),
+
+
+                const SizedBox(height: 24),
+
+                // ðŸ©º Medical Data Section
+                Text(
+                  "Medical Data (Filled by Nurse)".tr(),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  elevation: 2,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.favorite, color: Colors.red),
+                        title: Text("Heart Rate".tr()),
+                        trailing: Text("${data['heartRate'] ?? '--'} bpm"),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(
+                          Icons.bubble_chart,
+                          color: Colors.blue,
+                        ),
+                        title: Text("SpO2".tr()),
+                        trailing: Text("${data['spo2'] ?? '--'}%"),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(
+                          Icons.monitor_heart,
+                          color: Colors.purple,
+                        ),
+                        title: Text("Blood Pressure".tr()),
+                        trailing: Text(
+                          data['bloodPressure'] != null
+                              ? '${data['bloodPressure']['systolic'] ?? '--'}/${data['bloodPressure']['diastolic'] ?? '--'}'
+                              : '--',
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.air, color: Colors.teal),
+                        title: Text("Respiratory Rate".tr()),
+                        trailing: Text("${data['respiratoryRate'] ?? '--'}"),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.grain, color: Colors.orange),
+                        title: Text("Glucose".tr()),
+                        trailing: Text("${data['glucose'] ?? '--'}"),
+                      ),
+                      const Divider(height: 1),
+                      _buildEcgChart(data['ecgWaveform'] as List<dynamic>?),
+                    ],
+                  ),
+                ),
+                Text(
+                  "Prediction Result".tr(),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+
+                Card(
+                  elevation: 2,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      children: [
+                        _buildRiskTile("Overall Risk Level".tr(), overallVisual, aggregatedScore),
+                        const Divider(height: 16),
+                        _buildRiskTile("MI Risk".tr(), miVisual, miScore),
+                        _buildRiskTile("Heart Failure Risk".tr(), hfVisual, hfScore),
+                        _buildRiskTile("ECG Risk".tr(), ecgVisual, ecgScore),
+                        _buildRiskTile("Vitals Risk".tr(), vitalsVisual, vitalsScore),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+  Widget _buildRiskTile(String title, Map<String, dynamic> visual, double? score) {
+    return ListTile(
+      leading: Icon(
+        visual['icon'],
+        color: visual['color'],
+        size: 30,
+      ),
+      title: Text(title),
+      subtitle: Text("${visual['label']} (${(score ?? 0.0).toStringAsFixed(2)})"),
+    );
+  }
+
+  Widget _buildEcgChart(List<dynamic>? ecgData) {
+    if (ecgData == null || ecgData.isEmpty) {
+      return const Text(
+        "--",
+        style: TextStyle(fontSize: 16, color: Colors.grey),
+      );
+    }
+
+    final List<double> ecgValues =
+        ecgData.map((e) {
+          if (e is double) return e;
+          if (e is int) return e.toDouble();
+          if (e is String) return double.tryParse(e) ?? 0.0;
+          return 0.0;
+        }).toList();
+
+    final List<_ChartData> chartData = List.generate(
+      ecgValues.length,
+      (index) => _ChartData(index, ecgValues[index]),
+    );
+
+    return SizedBox(
+      height: 200,
+      child: SfCartesianChart(
+        plotAreaBorderWidth: 0, // ÙŠØ®ÙÙ Ø­Ø¯ÙˆØ¯ Ø§Ù„Ø±Ø³Ù…
+        primaryXAxis: NumericAxis(
+          isVisible: false, // Ù†Ø®ÙÙŠ Ø§Ù„Ù…Ø­ÙˆØ± Ø§Ù„Ø£ÙÙ‚ÙŠ Ø¹Ø´Ø§Ù† Ø§Ù„Ø±Ø³Ù… Ø£Ù†Ø¸Ù
+          minimum: 0,
+          maximum: ecgValues.length.toDouble(),
+        ),
+        primaryYAxis: NumericAxis(
+          isVisible: false, // Ù†Ø®ÙÙŠ Ø§Ù„Ù…Ø­ÙˆØ± Ø§Ù„Ø±Ø£Ø³ÙŠ
+          minimum: ecgValues.reduce((a, b) => a < b ? a : b) - 1,
+          maximum: ecgValues.reduce((a, b) => a > b ? a : b) + 1,
+        ),
+        series: <CartesianSeries<_ChartData, int>>[
+          SplineSeries<_ChartData, int>(
+            // Ø§Ù†Ø³ÙŠØ§Ø¨ÙŠØ© Ø£ÙƒØ«Ø± Ù…Ù† Ø§Ù„Ø®Ø· Ø§Ù„Ø¹Ø§Ø¯ÙŠ
+            dataSource: chartData,
+            xValueMapper: (_ChartData data, _) => data.x,
+            yValueMapper: (_ChartData data, _) => data.y,
+            color: Colors.blueAccent,
+            width: 3,
+            markerSettings: const MarkerSettings(isVisible: false),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChartData {
+  final int x;
+  final double y;
+  _ChartData(this.x, this.y);
+}
+===== E:\cardiac_app\lib\patient_detials.dart =====
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:syncfusion_flutter_charts/charts.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'alert.dart';
+
+class PatientDetailScreen extends StatelessWidget {
+  final String patientId;
+
+  const PatientDetailScreen({
+    super.key,
+    required this.patientId,
+  });
+
+  String getRiskLevelFromScore(double? score) {
+    if (score == null) return "Unknown";
+
+    if (score >= 0.0 && score < 0.33) {
+      return "Stable";
+    } else if (score >= 0.33 && score < 0.50) {
+      return "Moderate Risk";
+    } else if (score >= 0.50 && score <= 1.0) {
+      return "Critical Risk";
+    } else {
+      return "Unknown"; // Ù„Ùˆ ÙÙŠÙ‡ Ø±Ù‚Ù… Ø®Ø§Ø±Ø¬ Ø§Ù„Ù†Ø·Ø§Ù‚ Ù„Ø£ÙŠ Ø³Ø¨Ø¨
+    }
+  }
+
+
+  static String getLstmExplanation(String level) {
+    switch (level.toLowerCase()) {
+      case 'critical':
+      case 'critical risk':
+        return "Patient is in critical condition and requires immediate attention.".tr();
+      case 'moderate':
+      case 'moderate risk':
+        return "Patient at moderate risk; monitor closely.".tr();
+      case 'stable':
+      case 'non-critical risk':
+        return "Patient is stable; continue regular monitoring.".tr();
+      default:
+        return "No risk level data available.".tr();
+    }
+  }
+
+
+
+
+  @override
+  Widget build(BuildContext context) {
+
+    return Scaffold(
+      appBar: AppBar(
+        elevation: 0,
+        title: Text("icu_monitoring".tr(),
+            style: const TextStyle(
+                fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Center(
+              child: Text("patient_detail".tr(),
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+            ),
+          ),
+        ],
+      ),
+      body: FutureBuilder<DocumentSnapshot>(
+        future: FirebaseFirestore.instance.collection('patient_data').doc(patientId).get(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return  Center(child: Text("Patient data not found".tr()));
+          }
+
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          final riskScore = (data['aggregatedRiskScore'] as num?)?.toDouble();
+          final level = getRiskLevelFromScore(riskScore);
+
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: ListView(
+              children: [
+                Text("${data['name'] ?? '--'}",
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+
+                const SizedBox(height: 16),
+
+                // ECG Chart with real data
+                _buildEcgChart(data['ecgWaveform']),
+
+                const SizedBox(height: 16),
+                _vitalBlock("heart_rate".tr(), "${data['heartRate'] ?? '--'} bpm", Colors.blue),
+                const SizedBox(height: 12),
+                _vitalBlock(
+                    "blood_pressure".tr(),
+                    data['bloodPressure'] != null
+                        ? '${data['bloodPressure']['systolic'] ?? '--'}/${data['bloodPressure']['diastolic'] ?? '--'}'
+                        : '--',
+                    Colors.blue),
+                const SizedBox(height: 12),
+                _oxygenBlock(data),
+                const SizedBox(height: 16),
+
+                _riskBox(
+                  level,
+                  getLstmExplanation(level),
+                ),
+
+
+
+
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {},
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xff0B2346),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: Text("acknowledge".tr(),
+                            style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: ()async{
+                          final userDoc = await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(FirebaseAuth.instance.currentUser!.uid)
+                            .get();
+
+                        final role = userDoc.data()?['role'] ?? 'Nurse'; // fallback role
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AlertScreen(currentUserRole: role),
+                          ),
+                        );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: Text("escalate".tr(),
+                            style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  "alert_history".tr(),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(patientId) // â† Ù‡Ù†Ø§ Ø¨ØªØ­Ø·ÙŠ Ø§Ù„Ù€ UID Ø¨ØªØ§Ø¹ Ø§Ù„ÙŠÙˆØ²Ø± Ø§Ù„Ø­Ø§Ù„ÙŠ
+                      .collection('notifications')
+                      .orderBy('sentAt', descending: true) // â† Ù„Ùˆ Ø§Ù†ØªÙŠ Ù…Ø³Ù…ÙŠÙ‘Ø§Ù‡ ÙƒØ¯Ù‡
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return Text("no_alerts".tr());
+                    }
+
+                    final alerts = snapshot.data!.docs;
+
+                    return Column(
+                      children: alerts.map((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final time = (data['sentAt'] as Timestamp).toDate(); // â† Ø§Ø³Ù… Ø§Ù„ÙÙŠÙ„Ø¯ Ù‡Ù†Ø§ sentAt Ù…Ø´ timestamp
+                        final timeFormatted = "${time.hour}:${time.minute.toString().padLeft(2, '0')}";
+                        final status = data['risk'] ?? 'unknown';
+                        final isEscalated = status == 'Critical Risk';
+
+                        return _alertItem(
+                          timeFormatted,
+                          status,
+                          isEscalated ? Colors.red : Colors.blue,
+                          isEscalated ? Icons.warning : Icons.check_circle,
+                          DateFormat('EEEE').format(time),
+                        );
+                      }).toList(),
+                    );
+                  },
+                )
+
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _vitalBlock(String title, String value, Color lineColor) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Expanded(flex: 3, child: Text(title, style: const TextStyle(fontSize: 16))),
+          Expanded(flex: 5, child: Container()),
+          const SizedBox(width: 10),
+          Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _oxygenBlock(Map<String, dynamic> data) {
+    return Row(
+      children: [
+        Text("oxygen_saturation".tr(), style: const TextStyle(fontSize: 16)),
+        const Spacer(),
+        Text("${data['spo2'] ?? '--'}%",
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue)),
+      ],
+    );
+  }
+
+  Widget _riskBox(String level, String explanation) {
+    final color = _getColorForRisk(level);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        border: Border.all(color: color),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: TextStyle(color: color, fontWeight: FontWeight.w600),
+                children: [
+                  TextSpan(text: "${"ai_risk_prediction".tr()} "),
+                  TextSpan(text: level.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                  TextSpan(text: "\n$explanation", style: const TextStyle(fontWeight: FontWeight.normal)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Color _getColorForRisk(String level) {
+    switch (level.toLowerCase()) {
+      case "critical"|| 'critical risk':
+        return Colors.red;
+      case "moderate"||'moderate risk':
+        return Colors.orange;
+      case "stable"||'non-critical risk':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Widget _alertItem(String time, String status, Color color, IconData icon, String day) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: Text(time, style: TextStyle(color: color))),
+          Expanded(child: Text(status, style: TextStyle(color: color, fontWeight: FontWeight.bold))),
+          Text(day, style: TextStyle(color: color)),
+          const SizedBox(width: 8),
+          Icon(icon, color: color, size: 20),
+        ],
+      ),
+    );
+  }
+}
+Widget _buildEcgChart(List<dynamic>? ecgData) {
+  if (ecgData == null || ecgData.isEmpty) {
+    return const Text("--", style: TextStyle(fontSize: 16, color: Colors.grey));
+  }
+
+  final List<double> ecgValues = ecgData.map((e) {
+    if (e is double) return e;
+    if (e is int) return e.toDouble();
+    if (e is String) return double.tryParse(e) ?? 0.0;
+    return 0.0;
+  }).toList();
+
+  final List<_ChartData> chartData = List.generate(
+    ecgValues.length,
+        (index) => _ChartData(index, ecgValues[index]),
+  );
+
+  return SizedBox(
+    height: 200,
+    child: SfCartesianChart(
+      plotAreaBorderWidth: 0,  // ÙŠØ®ÙÙ Ø­Ø¯ÙˆØ¯ Ø§Ù„Ø±Ø³Ù…
+      primaryXAxis: NumericAxis(
+        isVisible: false,  // Ù†Ø®ÙÙŠ Ø§Ù„Ù…Ø­ÙˆØ± Ø§Ù„Ø£ÙÙ‚ÙŠ Ø¹Ø´Ø§Ù† Ø§Ù„Ø±Ø³Ù… Ø£Ù†Ø¸Ù
+        minimum: 0,
+        maximum: ecgValues.length.toDouble(),
+      ),
+      primaryYAxis: NumericAxis(
+        isVisible: false,  // Ù†Ø®ÙÙŠ Ø§Ù„Ù…Ø­ÙˆØ± Ø§Ù„Ø±Ø£Ø³ÙŠ
+        minimum: ecgValues.reduce((a, b) => a < b ? a : b) - 1,
+        maximum: ecgValues.reduce((a, b) => a > b ? a : b) + 1,
+      ),
+      series: <CartesianSeries<_ChartData, int>>[
+        SplineSeries<_ChartData, int>(  // Ø§Ù†Ø³ÙŠØ§Ø¨ÙŠØ© Ø£ÙƒØ«Ø± Ù…Ù† Ø§Ù„Ø®Ø· Ø§Ù„Ø¹Ø§Ø¯ÙŠ
+          dataSource: chartData,
+          xValueMapper: (_ChartData data, _) => data.x,
+          yValueMapper: (_ChartData data, _) => data.y,
+          color: Colors.blueAccent,
+          width: 3,
+          markerSettings: const MarkerSettings(isVisible: false),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ChartData {
+  final int x;
+  final double y;
+  _ChartData(this.x, this.y);
+}
+===== E:\cardiac_app\lib\profile.dart =====
+import 'package:cardiac_app/theme_provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:easy_localization/easy_localization.dart';
+
+class ProfileScreen extends StatelessWidget {
+  const ProfileScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    return Scaffold(
+      appBar: AppBar(),
+      body: FutureBuilder<DocumentSnapshot>(
+        future: FirebaseFirestore.instance.collection('users').doc(user!.uid).get(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return Center(child: Text("user_data_not_found".tr()));
+          }
+
+          final userData = snapshot.data!.data() as Map<String, dynamic>;
+
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 10),
+                Text("settings_profile".tr(), style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold)),
+                Center(
+                  child: CircleAvatar(
+                    radius: 50,
+                    backgroundImage: const NetworkImage('https://via.placeholder.com/100'),
+                    child: const Icon(Icons.person, size: 50, color: Colors.white),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Center(
+                  child: Column(
+                    children: [
+                      Text(
+                        userData['name'] ?? 'No Name',
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        userData['role'] ?? 'Unknown Role',
+                        style: const TextStyle(fontSize: 16, color: Colors.grey),
+                      ),
+                      Text(
+                        userData['email'] ?? '',
+                        style: const TextStyle(fontSize: 14, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 30),
+                Text("notification_preferences".tr(), style: const TextStyle(fontSize: 18)),
+
+                SwitchListTile(
+                  activeColor: Colors.blue[600],
+                  title: Text("push_notifications".tr()),
+                  value: true,
+                  onChanged: (val) {},
+                ),
+                SwitchListTile(
+                  activeColor: Colors.blue[600],
+                  title: Text("sms_notifications".tr()),
+                  value: false,
+                  onChanged: (val) {},
+                ),
+                const SizedBox(height: 10),
+                Text("language".tr(), style: const TextStyle(fontSize: 18)),
+                ListTile(
+                  title: Text("change_language".tr()),
+                  trailing: const Icon(Icons.language),
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: Text("select_language".tr()),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ListTile(
+                              title: const Text("English"),
+                              onTap: () {
+                                context.setLocale(const Locale('en'));
+                                Navigator.pop(context);
+                              },
+                            ),
+                            ListTile(
+                              title: const Text("Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©"),
+                              onTap: () {
+                                context.setLocale(const Locale('ar'));
+                                Navigator.pop(context);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+                Text("dark_mode".tr(), style: const TextStyle(fontSize: 18)),
+                SwitchListTile(
+                  activeColor: Colors.blue[600],
+                  title: Text("dark_mode".tr()),
+                  value: context.watch<ThemeProvider>().isDarkMode,
+                  onChanged: (val) {
+                    context.read<ThemeProvider>().toggleTheme(val);
+                  },
+                ),
+                const SizedBox(height: 10),
+                Center(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue[600],
+                      padding: const EdgeInsets.symmetric(horizontal: 82, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () async {
+                      await FirebaseAuth.instance.signOut();
+                      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+                    },
+                    child: Text("log_out".tr(), style: const TextStyle(fontSize: 20, color: Colors.white)),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+===== E:\cardiac_app\lib\theme_provider.dart =====
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class ThemeProvider with ChangeNotifier {
+  bool _isDarkMode = false;
+
+  bool get isDarkMode => _isDarkMode;
+
+  ThemeProvider() {
+    _loadTheme();
+  }
+
+  void toggleTheme(bool isOn) {
+    _isDarkMode = isOn;
+    _saveTheme(isOn);
+    notifyListeners();
+  }
+
+  void _loadTheme() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    _isDarkMode = prefs.getBool('darkMode') ?? false;
+    notifyListeners();
+  }
+
+  void _saveTheme(bool value) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    prefs.setBool('darkMode', value);
+  }
+}
